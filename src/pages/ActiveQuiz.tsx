@@ -1,16 +1,19 @@
 import { Link, useParams } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Session, Question, MCQOption, Player } from "@/types";
 import Card from "@/components/Card";
-import { getSessionStatus } from "@/lib/api";
+import { getSessionStatus, GameStatusResponse } from "@/lib/api";
 import Timer from "@/components/Timer";
 
 export default function ActiveQuiz() {
     const { sessionId } = useParams();
-    const [session, setSession] = useState<Session | null>(null);
+    const [gameStatus, setGameStatus] = useState<GameStatusResponse | null>(
+        null
+    );
     const [question, setQuestion] = useState<Question | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [players, setPlayers] = useState<Player[]>([]);
 
     // Fetch session status and current question
     const fetchSession = async () => {
@@ -18,8 +21,56 @@ export default function ActiveQuiz() {
         try {
             setLoading(true);
             const status = await getSessionStatus(sessionId);
-            setSession(status as any); // TODO: type mapping
-            setQuestion(status.current_question as any);
+            setGameStatus(status);
+
+            // Extract current question from the status
+            if (status.current_question) {
+                const currentQ = status.current_question;
+                setQuestion({
+                    id: currentQ.id || `q_${status.current_question_index}`,
+                    type: "mcq", // Default to MCQ for now
+                    prompt: currentQ.prompt || "",
+                    options: (currentQ.options || []).map((option, index) => ({
+                        id: `option_${index}`,
+                        text: String(option),
+                    })),
+                    answer: currentQ.answer || "",
+                });
+            } else {
+                setQuestion(null);
+            }
+
+            // Extract players from the status
+            if (status.players) {
+                const playerList: Player[] = [];
+                if (Array.isArray(status.players)) {
+                    status.players.forEach((player: any) => {
+                        playerList.push({
+                            id: player.player_id || player.id,
+                            name: player.player_name || player.name,
+                            email: player.player_email || player.email,
+                            answeredCurrent: player.answered_current || false,
+                            score: player.score || 0,
+                        });
+                    });
+                } else if (typeof status.players === "object") {
+                    // Handle object format: {total: number, list: array}
+                    const playersObj = status.players as any;
+                    if (playersObj.list && Array.isArray(playersObj.list)) {
+                        playersObj.list.forEach((player: any) => {
+                            playerList.push({
+                                id: player.player_id || player.id,
+                                name: player.player_name || player.name,
+                                email: player.player_email || player.email,
+                                answeredCurrent:
+                                    player.answered_current || false,
+                                score: player.score || 0,
+                            });
+                        });
+                    }
+                }
+                setPlayers(playerList);
+            }
         } catch (err: any) {
             setError(err.message || "Failed to fetch session");
         } finally {
@@ -32,14 +83,16 @@ export default function ActiveQuiz() {
         await fetchSession();
     };
 
-    // Initial fetch
-    useMemo(() => {
+    // Auto-refresh session status
+    useEffect(() => {
         fetchSession();
-        // eslint-disable-next-line
+        const interval = setInterval(fetchSession, 3000); // Refresh every 3 seconds
+        return () => clearInterval(interval);
     }, [sessionId]);
 
-    if (!session)
+    if (!gameStatus)
         return <main className="p-8">Session not found or loading…</main>;
+
     const keyer = `${sessionId}-${question?.id}`;
 
     return (
@@ -48,10 +101,11 @@ export default function ActiveQuiz() {
                 <Card className="p-6">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-semibold">
-                            Question {/* TODO: add current index from backend */} / {/* TODO: add total from backend */}
+                            Question {gameStatus.current_question_index + 1} /{" "}
+                            {gameStatus.total_questions}
                         </h2>
                         <Timer
-                            ms={session.timerMs}
+                            ms={30000} // Default 30 seconds, could be dynamic
                             keyer={keyer}
                             onEnd={next}
                         />
@@ -100,7 +154,7 @@ export default function ActiveQuiz() {
                         Player Status
                     </div>
                     <div className="space-y-2">
-                        {session.players?.map((p: Player) => (
+                        {players.map((p: Player) => (
                             <div
                                 key={p.id}
                                 className="flex items-center justify-between px-3 py-2 bg-ink-700 rounded-xl"
@@ -112,11 +166,11 @@ export default function ActiveQuiz() {
                                         : "Thinking…"}
                                 </div>
                                 <div className="text-sm font-semibold">
-                                    {p.score} pts
+                                    {p.score || 0} pts
                                 </div>
                             </div>
                         ))}
-                        {session.players?.length === 0 && (
+                        {players.length === 0 && (
                             <div className="text-stone-400 text-sm">
                                 No players joined yet.
                             </div>

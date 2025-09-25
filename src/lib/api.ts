@@ -298,6 +298,14 @@ export interface JoinGameRequest {
     session_code: string;
 }
 
+export interface CreatePlayerRequest {
+    player_name: string;
+    player_email: string;
+    player_mobile?: string;
+    hashed_password: string;
+    game_code?: string;
+}
+
 export interface LoginRequest {
     player_email: string;
     password: string;

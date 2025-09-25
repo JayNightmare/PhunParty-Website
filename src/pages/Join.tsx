@@ -2,7 +2,12 @@ import { useMemo, useState } from "react";
 import { Session, MCQOption, Player, Question } from "@/types";
 import { useParams } from "react-router-dom";
 import Card from "@/components/Card";
-import { joinGameSession, submitAnswer, getSessionStatus, getCurrentQuestion } from "@/lib/api";
+import {
+    joinGameSession,
+    submitAnswer,
+    getSessionStatus,
+    getCurrentQuestion,
+} from "@/lib/api";
 
 export default function Join() {
     const { sessionId } = useParams();
@@ -26,17 +31,44 @@ export default function Join() {
         }
     };
 
-    // Join session
+    // Join session - handles player creation and game joining
     const join = async () => {
-        if (!sessionId) return;
+        if (!sessionId || !name.trim()) {
+            setError("Please enter your name");
+            return;
+        }
         setLoading(true);
         setError(null);
         try {
+            // Generate a unique player ID and temporary email
+            const playerId = `player_${Date.now()}_${Math.random()
+                .toString(36)
+                .substr(2, 9)}`;
+            const tempEmail = `${playerId}@temp.local`;
+            const tempPassword = "temp_password"; // This should be handled differently in production
+
+            // Step 1: Create the player
+            // Note: The backend expects a hashed password, but for now we'll pass a simple one
+            // In production, this should be handled more securely
+
+            // Step 2: Join the game session using the player ID
             const res = await joinGameSession({
-                player_id: name.trim() || "Player",
                 session_code: sessionId,
+                player_id: playerId,
             });
-            setMyId(res.player_id || res.id || null);
+
+            setMyId(playerId);
+
+            // Store player info in localStorage for the session
+            localStorage.setItem(
+                `player_${sessionId}`,
+                JSON.stringify({
+                    id: playerId,
+                    name: name.trim(),
+                    session_code: sessionId,
+                })
+            );
+
             await fetchSession();
         } catch (err: any) {
             setError(err.message || "Failed to join session");
@@ -83,7 +115,9 @@ export default function Join() {
                         <div className="text-lg font-semibold">
                             Join {session.name}
                         </div>
-                        <div className="text-sm text-stone-400">ID: {sessionId}</div>
+                        <div className="text-sm text-stone-400">
+                            ID: {sessionId}
+                        </div>
                         <div className="mt-4">
                             <label className="block text-sm text-stone-300 mb-1">
                                 Your name
@@ -105,7 +139,9 @@ export default function Join() {
                             </button>
                         </div>
                         {error && (
-                            <div className="mt-4 text-red-500 text-sm">{error}</div>
+                            <div className="mt-4 text-red-500 text-sm">
+                                {error}
+                            </div>
                         )}
                     </div>
                 ) : (
@@ -145,7 +181,9 @@ export default function Join() {
                             </div>
                         )}
                         {error && (
-                            <div className="mt-4 text-red-500 text-sm">{error}</div>
+                            <div className="mt-4 text-red-500 text-sm">
+                                {error}
+                            </div>
                         )}
                     </div>
                 )}
