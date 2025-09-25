@@ -20,6 +20,7 @@ import {
     preloadCriticalComponents,
     usePerformanceMonitoring,
 } from "@/components/Performance";
+import DevTools from "@/components/DevTools";
 
 export default function App() {
     // Performance monitoring
@@ -82,6 +83,7 @@ export default function App() {
                             />
                             <Route path="/join/:sessionId" element={<Join />} />
                         </Routes>
+                        <DevTools />
                     </HashRouter>
                 </AuthProvider>
             </ToastProvider>

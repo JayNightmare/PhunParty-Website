@@ -12,6 +12,7 @@ import {
     CreatePlayerRequest,
     PlayerResponse,
 } from "@/lib/api";
+import CORSHelper from "@/components/CORSHelper";
 
 interface User {
     id: string;
@@ -30,6 +31,8 @@ interface AuthContextType {
     isLoading: boolean;
     error: string | null;
     clearError: () => void;
+    showCORSHelper: boolean;
+    setCORSHelper: (show: boolean) => void;
 }
 
 interface RegisterData {
@@ -58,6 +61,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [showCORSHelper, setShowCORSHelper] = useState(false);
 
     // Initialize auth state from localStorage
     useEffect(() => {
@@ -107,7 +111,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setUser(userData);
             localStorage.setItem("auth_user", JSON.stringify(userData));
         } catch (err: any) {
-            setError(err.message || "Login failed");
+            const errorMessage = err.message || "Login failed";
+            setError(errorMessage);
+
+            // Check if it's a CORS error
+            if (
+                errorMessage.toLowerCase().includes("cors") ||
+                errorMessage.toLowerCase().includes("cross-origin") ||
+                errorMessage.toLowerCase().includes("network error")
+            ) {
+                setShowCORSHelper(true);
+            }
+
             throw err;
         } finally {
             setIsLoading(false);
@@ -149,6 +164,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const clearError = () => setError(null);
 
+    const setCORSHelper = (show: boolean) => setShowCORSHelper(show);
+
     const value: AuthContextType = {
         user,
         token,
@@ -158,9 +175,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading,
         error,
         clearError,
+        showCORSHelper,
+        setCORSHelper,
     };
 
     return (
-        <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+        <AuthContext.Provider value={value}>
+            {children}
+            {showCORSHelper && (
+                <CORSHelper onClose={() => setShowCORSHelper(false)} />
+            )}
+        </AuthContext.Provider>
     );
 };

@@ -434,7 +434,7 @@ export interface CreatePlayerRequest {
 
 export interface LoginRequest {
     player_email: string;
-    hashed_password: string;
+    password: string;
 }
 
 export interface LoginResponse {

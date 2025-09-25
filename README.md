@@ -7,7 +7,17 @@ Cozy indie trivia game. React + Vite + Tailwind frontend, Python backend API (`a
 
 1. `npm i`
 2. Copy `.env.example` to `.env.local` and set your API key
-3. `npm run dev`
+3. `npm run dev` (automatically handles CORS via development proxy)
+4. Open http://localhost:5173
+
+### CORS Development Notes
+
+The development server automatically proxies `/api/*` requests to `https://api.phun.party` to avoid CORS issues. No additional configuration needed for local development.
+
+If you encounter CORS errors during login:
+- The app includes a built-in CORS troubleshooting helper
+- Ensure you're using the development server (not build files)
+- Check that `VITE_API_URL` is set correctly in `.env.local`
 
 ## Environment Variables
 
