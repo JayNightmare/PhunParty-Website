@@ -15,9 +15,10 @@ Cozy indie trivia game. React + Vite + Tailwind frontend, Python backend API (`a
 The development server automatically proxies `/api/*` requests to `https://api.phun.party` to avoid CORS issues. No additional configuration needed for local development.
 
 If you encounter CORS errors during login:
-- The app includes a built-in CORS troubleshooting helper
+- The app includes a built-in CORS troubleshooting helper with diagnostics
+- Use the DevTools panel (bottom-right) to test API connectivity
 - Ensure you're using the development server (not build files)
-- Check that `VITE_API_URL` is set correctly in `.env.local`
+- Check that `VITE_API_URL` is set correctly in `.env.local`S
 
 ## Environment Variables
 

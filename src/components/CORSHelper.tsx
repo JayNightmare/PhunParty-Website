@@ -147,14 +147,43 @@ export default function CORSHelper({ onClose }: CORSHelperProps) {
 
                         <div className="p-4 bg-blue-900/20 border border-blue-800 rounded-xl">
                             <h3 className="font-semibold text-blue-400 mb-2">
-                                Backend CORS Configuration
+                                Server CORS Configuration
                             </h3>
                             <p className="text-sm text-blue-300 mb-3">
-                                If you control the backend, add these CORS
-                                settings:
+                                Choose the appropriate configuration for your
+                                setup:
                             </p>
-                            <pre className="text-xs bg-ink-800 p-3 rounded border text-stone-300 overflow-x-auto">
-                                {`# FastAPI Example (main.py)
+
+                            <div className="space-y-4">
+                                <div>
+                                    <h4 className="text-sm font-medium text-blue-300 mb-2">
+                                        Option 1: Nginx (Recommended)
+                                    </h4>
+                                    <pre className="text-xs bg-ink-800 p-3 rounded border text-stone-300 overflow-x-auto">
+                                        {`# Add to your nginx server block
+add_header 'Access-Control-Allow-Origin' '*' always;
+add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS, PATCH' always;
+add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-API-Key,x-api-key' always;
+
+# Handle preflight requests
+if ($request_method = 'OPTIONS') {
+    add_header 'Access-Control-Allow-Origin' '*' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS, PATCH' always;
+    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-API-Key,x-api-key' always;
+    add_header 'Access-Control-Max-Age' 1728000;
+    add_header 'Content-Type' 'text/plain charset=UTF-8';
+    add_header 'Content-Length' 0;
+    return 204;
+}`}
+                                    </pre>
+                                </div>
+
+                                <div>
+                                    <h4 className="text-sm font-medium text-blue-300 mb-2">
+                                        Option 2: FastAPI Backend
+                                    </h4>
+                                    <pre className="text-xs bg-ink-800 p-3 rounded border text-stone-300 overflow-x-auto">
+                                        {`# FastAPI Example (main.py)
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
@@ -164,7 +193,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )`}
-                            </pre>
+                                    </pre>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="p-4 bg-amber-900/20 border border-amber-800 rounded-xl">

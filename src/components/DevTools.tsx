@@ -56,6 +56,48 @@ const DevTools: React.FC = () => {
         }
     };
 
+    const testCors = async () => {
+        setIsLoading(true);
+        setTestResult("Testing CORS directly to production API...");
+
+        try {
+            // Test direct request to production API (should fail if CORS not configured)
+            const response = await fetch("https://api.phun.party/auth/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    player_email: "test@example.com",
+                    password: "testpassword",
+                }),
+            });
+
+            const result = await response.text();
+            setTestResult(
+                `✅ Direct API Request Success (${response.status}): ${result}\n\n🎉 CORS is working! The server has proper CORS configuration.`
+            );
+        } catch (error) {
+            const errorMessage =
+                error instanceof Error ? error.message : String(error);
+            if (
+                errorMessage.toLowerCase().includes("cors") ||
+                errorMessage.toLowerCase().includes("cross-origin") ||
+                errorMessage.toLowerCase().includes("network")
+            ) {
+                setTestResult(
+                    `❌ CORS Error Confirmed: ${errorMessage}\n\n🔧 Server needs CORS configuration. Check the deployment guide.`
+                );
+            } else {
+                setTestResult(
+                    `❌ Direct API Test Failed: ${errorMessage}\n\nThis might be a server error rather than CORS.`
+                );
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     // Only show in development
     if (import.meta.env.PROD) {
         return null;
@@ -77,7 +119,14 @@ const DevTools: React.FC = () => {
                     disabled={isLoading}
                     className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-500 text-white px-3 py-1 rounded text-sm"
                 >
-                    {isLoading ? "Testing..." : "Test Login Endpoint"}
+                    {isLoading ? "Testing..." : "Test Login (via Proxy)"}
+                </button>
+                <button
+                    onClick={testCors}
+                    disabled={isLoading}
+                    className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-500 text-white px-3 py-1 rounded text-sm"
+                >
+                    {isLoading ? "Testing..." : "Test CORS Direct"}
                 </button>
             </div>
             {testResult && (

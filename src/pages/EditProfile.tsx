@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import Card from "@/components/Card";
 import { useAuth } from "@/contexts/AuthContext";
+import { updatePlayer } from "@/lib/api";
 
 export default function EditProfile() {
     const { user, isLoading: authLoading } = useAuth();
@@ -70,14 +71,30 @@ export default function EditProfile() {
         }
 
         try {
-            // Note: In a real implementation, you would call an update profile API
-            // For now, we'll simulate success since the backend doesn't have an update endpoint
+            if (!user || !user.id) {
+                throw new Error("Missing user information. Please log in again.");
+            }
 
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API call
+            const payload = {
+                player_name: formData.name.trim(),
+                player_email: formData.email.trim(),
+                player_mobile: formData.mobile.trim() || undefined,
+            };
+
+            const updated = await updatePlayer(user.id, payload);
+
+            const updatedUser = {
+                ...user,
+                name: updated.player_name,
+                email: updated.player_email,
+                mobile: updated.player_mobile || "",
+            };
+
+            Object.assign(user, updatedUser);
+            localStorage.setItem("auth_user", JSON.stringify(updatedUser));
 
             setSuccess(true);
 
-            // Navigate back to account page after a delay
             setTimeout(() => {
                 navigate("/account");
             }, 1500);
@@ -214,12 +231,8 @@ export default function EditProfile() {
                 <div className="mt-6 pt-6 border-t border-ink-600">
                     <div className="text-sm text-stone-400 space-y-1">
                         <p>
-                            <strong>Note:</strong> Profile updates are currently
-                            simulated.
-                        </p>
-                        <p>
-                            In the full implementation, changes would be saved
-                            to your account.
+                            <strong>Tip:</strong> Profile updates apply across
+                            all Phun Party experiences.
                         </p>
                     </div>
                 </div>
