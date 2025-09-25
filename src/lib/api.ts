@@ -1,7 +1,95 @@
 export const API_BASE_URL = (
-    import.meta.env.VITE_API_URL || "https://api.phun.party"
+    import.meta.env.DEV
+        ? "/api" // Use proxy during development
+        : import.meta.env.VITE_API_URL || "https://api.phun.party"
 ).replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_KEY;
+
+// Test function to check API connection
+export async function testApiConnection(): Promise<{
+    status: string;
+    details: any;
+}> {
+    try {
+        console.log("🔍 Testing API connection to:", API_BASE_URL);
+        console.log(
+            "🔑 Using API Key:",
+            API_KEY ? `${API_KEY.substring(0, 8)}...` : "❌ No API key set"
+        );
+
+        // Test multiple endpoints to see what works
+        const testEndpoints = [
+            "/", // Root endpoint
+            "/health", // Health check
+            "/docs", // FastAPI docs
+            "/game/", // Game endpoint
+        ];
+
+        const results = [];
+
+        for (const endpoint of testEndpoints) {
+            console.log(`\n🧪 Testing endpoint: ${API_BASE_URL}${endpoint}`);
+
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    method: "GET",
+                    headers: {
+                        "x-api-key": API_KEY || "",
+                        Accept: "application/json",
+                    },
+                });
+                const contentType =
+                    response.headers.get("content-type") || "unknown";
+                const text = await response.text();
+
+                console.log(
+                    `📊 ${endpoint} - Status: ${response.status} ${response.statusText}`
+                );
+                console.log(`📄 ${endpoint} - Content-Type: ${contentType}`);
+                console.log(
+                    `📝 ${endpoint} - Body preview: ${text.substring(0, 100)}${
+                        text.length > 100 ? "..." : ""
+                    }`
+                );
+
+                results.push({
+                    endpoint,
+                    status: response.status,
+                    statusText: response.statusText,
+                    contentType,
+                    bodyPreview: text.substring(0, 200),
+                    isJson: contentType.includes("application/json"),
+                    headers: Object.fromEntries(response.headers.entries()),
+                });
+            } catch (error) {
+                console.error(`❌ Error testing ${endpoint}:`, error);
+                results.push({
+                    endpoint,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+
+        return {
+            status: "tested",
+            details: {
+                apiBaseUrl: API_BASE_URL,
+                apiKeySet: !!API_KEY,
+                apiKeyPreview: API_KEY ? `${API_KEY.substring(0, 8)}...` : null,
+                endpointTests: results,
+            },
+        };
+    } catch (error) {
+        console.error("❌ API connection test failed:", error);
+        return {
+            status: "error",
+            details: {
+                error: error instanceof Error ? error.message : String(error),
+            },
+        };
+    }
+}
 
 function buildUrl(path: string): string {
     const normalized = path.startsWith("/") ? path : `/${path}`;
@@ -15,13 +103,26 @@ async function apiFetch<T>(
 ): Promise<T> {
     const headers = new Headers(init.headers ?? undefined);
 
-    if (API_KEY && !headers.has("Bearer")) {
-        headers.set("Bearer", API_KEY);
+    if (API_KEY && !headers.has("x-api-key")) {
+        headers.set("x-api-key", API_KEY);
     }
 
     if (init.body && !headers.has("Content-Type")) {
         headers.set("Content-Type", "application/json");
     }
+
+    // Add additional headers that might help with CORS
+    if (!headers.has("Accept")) {
+        headers.set("Accept", "application/json");
+    }
+
+    // Debug logging
+    console.log("API Request:", {
+        url: buildUrl(path),
+        method: init.method || "GET",
+        headers: Object.fromEntries(headers.entries()),
+        body: init.body,
+    });
 
     const response = await fetch(buildUrl(path), { ...init, headers });
 
@@ -43,7 +144,32 @@ async function apiFetch<T>(
         return undefined as T;
     }
 
-    return (await response.json()) as T;
+    // Get response text first to handle both JSON and non-JSON responses
+    const responseText = await response.text();
+
+    // Check if response is actually JSON
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+        console.error("Expected JSON but received:", contentType, responseText);
+        throw new Error(
+            `Expected JSON response but received: ${contentType}. Response: ${responseText.substring(
+                0,
+                200
+            )}...`
+        );
+    }
+
+    try {
+        return JSON.parse(responseText) as T;
+    } catch (error) {
+        console.error("JSON parse error. Response text:", responseText);
+        throw new Error(
+            `Failed to parse JSON response: ${error}. Response: ${responseText.substring(
+                0,
+                200
+            )}...`
+        );
+    }
 }
 
 export interface ScoresResponseModel {
@@ -340,6 +466,16 @@ export interface PasswordUpdateResponse {
     token_type: string;
 }
 
+export interface StartGameRequest {
+    session_code: string;
+}
+
+export interface StartGameResponse {
+    message: string;
+    session_code: string;
+    game_state: string;
+}
+
 export async function getScores(
     session_code: string
 ): Promise<ScoresResponseModel[]> {
@@ -500,10 +636,52 @@ export async function joinGameSession(
 }
 
 export async function login(data: LoginRequest): Promise<LoginResponse> {
-    return apiFetch<LoginResponse>("/auth/login", {
+    // Login endpoint doesn't require API key according to OpenAPI spec
+    const headers = new Headers();
+    headers.set("Content-Type", "application/json");
+    headers.set("Accept", "application/json");
+
+    console.log("Login request:", {
+        url: buildUrl("/auth/login"),
         method: "POST",
+        headers: Object.fromEntries(headers.entries()),
         body: JSON.stringify(data),
     });
+
+    const response = await fetch(buildUrl("/auth/login"), {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+        let message: string | undefined;
+
+        try {
+            const errorData = await response.json();
+            message = errorData.detail || errorData.message;
+        } catch {
+            message = await response.text();
+        }
+
+        throw new Error(
+            message || `Login failed with status ${response.status}`
+        );
+    }
+
+    const responseText = await response.text();
+
+    try {
+        return JSON.parse(responseText) as LoginResponse;
+    } catch (error) {
+        console.error("JSON parse error. Response text:", responseText);
+        throw new Error(
+            `Failed to parse login response: ${error}. Response: ${responseText.substring(
+                0,
+                200
+            )}...`
+        );
+    }
 }
 
 export async function requestPasswordReset(
@@ -529,6 +707,111 @@ export async function updatePassword(
 ): Promise<PasswordUpdateResponse> {
     return apiFetch<PasswordUpdateResponse>("/password-reset/update", {
         method: "PUT",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function startGame(
+    data: StartGameRequest
+): Promise<StartGameResponse> {
+    return apiFetch<StartGameResponse>("/game-logic/start", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+// Game Control API Functions
+export interface PauseGameRequest {
+    session_code: string;
+}
+
+export interface PauseGameResponse {
+    success: boolean;
+    message?: string;
+}
+
+export interface ResumeGameRequest {
+    session_code: string;
+}
+
+export interface ResumeGameResponse {
+    success: boolean;
+    message?: string;
+}
+
+export interface NextQuestionRequest {
+    session_code: string;
+}
+
+export interface NextQuestionResponse {
+    success: boolean;
+    message?: string;
+    next_question_index?: number;
+}
+
+export interface PreviousQuestionRequest {
+    session_code: string;
+}
+
+export interface PreviousQuestionResponse {
+    success: boolean;
+    message?: string;
+    previous_question_index?: number;
+}
+
+export interface EndGameRequest {
+    session_code: string;
+}
+
+export interface EndGameResponse {
+    success: boolean;
+    message?: string;
+    final_scores?: Array<{
+        player_id: string;
+        player_name: string;
+        score: number;
+    }>;
+}
+
+export async function pauseGame(
+    data: PauseGameRequest
+): Promise<PauseGameResponse> {
+    return apiFetch<PauseGameResponse>("/game-logic/pause", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function resumeGame(
+    data: ResumeGameRequest
+): Promise<ResumeGameResponse> {
+    return apiFetch<ResumeGameResponse>("/game-logic/resume", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function nextQuestion(
+    data: NextQuestionRequest
+): Promise<NextQuestionResponse> {
+    return apiFetch<NextQuestionResponse>("/game-logic/next-question", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function previousQuestion(
+    data: PreviousQuestionRequest
+): Promise<PreviousQuestionResponse> {
+    return apiFetch<PreviousQuestionResponse>("/game-logic/previous-question", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function endGame(data: EndGameRequest): Promise<EndGameResponse> {
+    return apiFetch<EndGameResponse>("/game-logic/end", {
+        method: "POST",
         body: JSON.stringify(data),
     });
 }

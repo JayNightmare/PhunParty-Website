@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhunParty - Offline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+        
+        .offline-container {
+            text-align: center;
+            max-width: 400px;
+        }
+        
+        .offline-icon {
+            font-size: 4rem;
+            margin-bottom: 2rem;
+            opacity: 0.7;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #2dd4bf;
+        }
+        
+        p {
+            margin-bottom: 2rem;
+            opacity: 0.8;
+            line-height: 1.6;
+        }
+        
+        .retry-button {
+            background: #2dd4bf;
+            color: #0f0f23;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s;
+        }
+        
+        .retry-button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .cached-pages {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .cached-pages h2 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            opacity: 0.9;
+        }
+        
+        .cached-page-link {
+            display: inline-block;
+            color: #2dd4bf;
+            text-decoration: none;
+            margin: 0.5rem;
+            padding: 0.5rem 1rem;
+            border: 1px solid #2dd4bf;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+        }
+        
+        .cached-page-link:hover {
+            background: #2dd4bf;
+            color: #0f0f23;
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="offline-icon">📱💨</div>
+        <h1>You're Offline</h1>
+        <p>
+            No internet connection detected. PhunParty needs an internet connection to join games and sync with other players.
+        </p>
+        
+        <button class="retry-button" onclick="window.location.reload()">
+            Try Again
+        </button>
+        
+        <div class="cached-pages">
+            <h2>Available Offline</h2>
+            <a href="/" class="cached-page-link">Home</a>
+            <a href="/account" class="cached-page-link">Account</a>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-retry when connection is restored
+        window.addEventListener('online', () => {
+            console.log('Connection restored, reloading...');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        });
+        
+        // Show connection status
+        if (navigator.onLine) {
+            document.querySelector('p').innerHTML = 
+                'Connection restored! <a href="/" style="color: #2dd4bf;">Return to PhunParty</a>';
+        }
+    </script>
+</body>
+</html>

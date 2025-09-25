@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>PhunParty API Test</h1>
+    <button onclick="testAPI()">Test API Connection</button>
+    <div id="results" style="margin-top: 20px; white-space: pre-wrap; font-family: monospace;"></div>
+
+    <script>
+        async function testAPI() {
+            const results = document.getElementById('results');
+            results.innerHTML = 'Testing API...\n';
+            
+            const API_KEY = '7B51C1DBB935D3043B8804814979C65511EB2F6B0D6033B5D51AE52C121FA755';
+            const API_BASE = 'https://api.phun.party';
+            
+            const endpoints = ['/', '/health', '/docs', '/game/'];
+            
+            for (const endpoint of endpoints) {
+                results.innerHTML += `\nTesting: ${API_BASE}${endpoint}\n`;
+                
+                try {
+                    const response = await fetch(`${API_BASE}${endpoint}`, {
+                        method: 'GET',
+                        headers: {
+                            'x-api-key': API_KEY,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    
+                    const contentType = response.headers.get('content-type') || 'unknown';
+                    const text = await response.text();
+                    
+                    results.innerHTML += `Status: ${response.status} ${response.statusText}\n`;
+                    results.innerHTML += `Content-Type: ${contentType}\n`;
+                    results.innerHTML += `Response: ${text.substring(0, 200)}\n`;
+                    results.innerHTML += `Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}\n`;
+                    
+                } catch (error) {
+                    results.innerHTML += `Error: ${error.message}\n`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

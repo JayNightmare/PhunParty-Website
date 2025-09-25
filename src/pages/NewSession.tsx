@@ -1,12 +1,17 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import Card from "@/components/Card";
 import { createSession, getGames } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { Difficulty } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { LoadingButton, LoadingState } from "@/components/Loading";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function NewSession() {
+    const { user, isLoading: authLoading } = useAuth();
+    const { showSuccess, showError } = useToast();
     const nav = useNavigate();
-    const [hostName, setHostName] = useState("Game Host");
+    const [hostName, setHostName] = useState("");
     const [num, setNum] = useState(5);
     const [difficulty, setDifficulty] = useState<Difficulty>("Easy");
     const [availableGames, setAvailableGames] = useState<any[]>([]);
@@ -15,6 +20,13 @@ export default function NewSession() {
     const [loading, setLoading] = useState(false);
     const [loadingGames, setLoadingGames] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Set default host name from authenticated user
+    useEffect(() => {
+        if (user?.name) {
+            setHostName(user.name);
+        }
+    }, [user]);
 
     // Load available games on component mount
     useEffect(() => {
@@ -44,6 +56,22 @@ export default function NewSession() {
         loadGames();
     }, []);
 
+    // Redirect to login if not authenticated
+    if (!authLoading && !user) {
+        return <Navigate to="/login" replace />;
+    }
+
+    // Show loading state while checking auth
+    if (authLoading) {
+        return (
+            <main className="max-w-3xl mx-auto px-4 py-8">
+                <Card className="p-6">
+                    <LoadingState message="Loading session creator..." />
+                </Card>
+            </main>
+        );
+    }
+
     const create = async () => {
         setLoading(true);
         setError(null);
@@ -66,9 +94,14 @@ export default function NewSession() {
                 number_of_questions: num,
                 game_code: selectedGameCode,
             });
+            showSuccess(
+                `Game session created successfully! Code: ${session.code}`
+            );
             nav(`/sessions?focus=${session.code}`);
         } catch (err: any) {
-            setError(err.message || "Failed to create session");
+            const errorMsg = err.message || "Failed to create session";
+            setError(errorMsg);
+            showError(errorMsg);
         } finally {
             setLoading(false);
         }
@@ -156,13 +189,14 @@ export default function NewSession() {
                     </div>
                 </div>
                 <div className="mt-6 flex justify-end">
-                    <button
+                    <LoadingButton
                         onClick={create}
-                        className="px-6 py-3 rounded-2xl bg-tea-500 text-ink-900 font-semibold"
-                        disabled={loading}
+                        isLoading={loading}
+                        loadingText="Creating session..."
+                        className="px-6 py-3"
                     >
-                        {loading ? "Creating..." : "Create"}
-                    </button>
+                        Create Session
+                    </LoadingButton>
                 </div>
                 {error && (
                     <div className="mt-4 text-red-500 text-sm">{error}</div>
