@@ -24,7 +24,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     token: string | null;
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, hashed_password: string) => Promise<void>;
     register: (userData: RegisterData) => Promise<void>;
     logout: () => void;
     isLoading: boolean;
@@ -35,7 +35,7 @@ interface AuthContextType {
 interface RegisterData {
     name: string;
     email: string;
-    password: string;
+    hashed_password: string;
     mobile?: string;
 }
 
@@ -78,12 +78,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsLoading(false);
     }, []);
 
-    const handleLogin = async (email: string, password: string) => {
+    const handleLogin = async (email: string, hashed_password: string) => {
         setIsLoading(true);
         setError(null);
 
         try {
-            const loginData: LoginRequest = { player_email: email, password };
+            const loginData: LoginRequest = {
+                player_email: email,
+                hashed_password,
+            };
             const response = await login(loginData);
 
             // Store token
@@ -116,18 +119,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setError(null);
 
         try {
-            // Send plain password - the backend will hash it properly with bcrypt
+            // Send plain hashed_password - the backend will hash it properly with bcrypt
             const registerData: CreatePlayerRequest = {
                 player_name: userData.name,
                 player_email: userData.email,
                 player_mobile: userData.mobile,
-                hashed_password: userData.password, // Backend expects plain password and does bcrypt hashing
+                hashed_password: userData.hashed_password, // Backend expects plain hashed_password and does bcrypt hashing
             };
 
             const response = await createPlayer(registerData);
 
             // After successful registration, log them in
-            await handleLogin(userData.email, userData.password);
+            await handleLogin(userData.email, userData.hashed_password);
         } catch (err: any) {
             setError(err.message || "Registration failed");
             throw err;
