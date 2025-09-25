@@ -25,7 +25,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     token: string | null;
-    login: (email: string, hashed_password: string) => Promise<void>;
+    login: (email: string, password: string) => Promise<void>;
     register: (userData: RegisterData) => Promise<void>;
     logout: () => void;
     isLoading: boolean;
@@ -36,10 +36,11 @@ interface AuthContextType {
 }
 
 interface RegisterData {
-    name: string;
-    email: string;
-    hashed_password: string;
-    mobile?: string;
+    player_name: string;
+    player_email: string;
+    password: string;
+    player_mobile?: string;
+    active_game_code?: null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -82,14 +83,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsLoading(false);
     }, []);
 
-    const handleLogin = async (email: string, hashed_password: string) => {
+    const handleLogin = async (email: string, password: string) => {
         setIsLoading(true);
         setError(null);
 
         try {
             const loginData: LoginRequest = {
                 player_email: email,
-                hashed_password,
+                password,
             };
             const response = await login(loginData);
 
@@ -134,18 +135,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setError(null);
 
         try {
-            // Send plain hashed_password - the backend will hash it properly with bcrypt
+            // Send plain password - the backend will hash it properly with bcrypt
             const registerData: CreatePlayerRequest = {
                 player_name: userData.name,
                 player_email: userData.email,
                 player_mobile: userData.mobile,
-                hashed_password: userData.hashed_password, // Backend expects plain hashed_password and does bcrypt hashing
+                password: userData.password, // Backend expects plain password and does bcrypt hashing
             };
 
             const response = await createPlayer(registerData);
 
             // After successful registration, log them in
-            await handleLogin(userData.email, userData.hashed_password);
+            await handleLogin(userData.email, userData.password);
         } catch (err: any) {
             setError(err.message || "Registration failed");
             throw err;
