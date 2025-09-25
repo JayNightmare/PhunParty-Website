@@ -72,7 +72,9 @@ export default function EditProfile() {
 
         try {
             if (!user || !user.id) {
-                throw new Error("Missing user information. Please log in again.");
+                throw new Error(
+                    "Missing user information. Please log in again."
+                );
             }
 
             const payload = {
@@ -87,7 +89,7 @@ export default function EditProfile() {
                 ...user,
                 name: updated.player_name,
                 email: updated.player_email,
-                mobile: updated.player_mobile || "",
+                // mobile: updated.player_mobile || "",
             };
 
             Object.assign(user, updatedUser);
