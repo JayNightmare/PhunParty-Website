@@ -15,6 +15,7 @@ export const shuffle = <T>(arr: T[]) => {
 
 export const save = (k: string, v: unknown) =>
     localStorage.setItem(k, JSON.stringify(v));
+
 export const load = <T>(k: string, fallback: T): T => {
     try {
         const raw = localStorage.getItem(k);
