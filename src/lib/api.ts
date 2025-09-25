@@ -15,8 +15,8 @@ async function apiFetch<T>(
 ): Promise<T> {
     const headers = new Headers(init.headers ?? undefined);
 
-    if (API_KEY && !headers.has("X-API-Key")) {
-        headers.set("X-API-Key", API_KEY);
+    if (API_KEY && !headers.has("Bearer")) {
+        headers.set("Bearer", API_KEY);
     }
 
     if (init.body && !headers.has("Content-Type")) {
