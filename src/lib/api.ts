@@ -1,201 +1,526 @@
-// API client for backend at api.phunparty.com
-// All endpoints use fetch and return typed data
+export const API_BASE_URL = (
+    import.meta.env.VITE_API_URL || "https://api.phun.party"
+).replace(/\/$/, "");
+const API_KEY = import.meta.env.VITE_API_KEY;
 
-export const API_URL =
-    import.meta.env.VITE_API_URL || "https://api.phunparty.com";
+function buildUrl(path: string): string {
+    const normalized = path.startsWith("/") ? path : `/${path}`;
+    return `${API_BASE_URL}${normalized}`;
+}
 
-// --- Types matching backend models ---
+async function apiFetch<T>(
+    path: string,
+    init: RequestInit = {},
+    parseJson = true
+): Promise<T> {
+    const headers = new Headers(init.headers ?? undefined);
+
+    if (API_KEY && !headers.has("X-API-Key")) {
+        headers.set("X-API-Key", API_KEY);
+    }
+
+    if (init.body && !headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+    }
+
+    const response = await fetch(buildUrl(path), { ...init, headers });
+
+    if (!response.ok) {
+        let message: string | undefined;
+
+        try {
+            message = await response.text();
+        } catch {
+            message = undefined;
+        }
+
+        throw new Error(
+            message || `Request failed with status ${response.status}`
+        );
+    }
+
+    if (!parseJson || response.status === 204) {
+        return undefined as T;
+    }
+
+    return (await response.json()) as T;
+}
+
 export interface ScoresResponseModel {
+    score_id: string;
     player_id: string;
     score: number;
-    name: string;
+    result?: string | null;
+    session_code: string;
 }
 
 export interface PlayerResponse {
-    id: string;
-    name: string;
-    score: number;
-    correct: number;
-    // Add other fields as needed
+    player_id: string;
+    player_name: string;
+    player_email: string;
+    player_mobile?: string | null;
+    active_game_code?: string | null;
 }
 
-export interface GameStatusResponse {
-    current_question: QuestionResponse | null;
-    player_response_counts: Record<string, number>;
-    game_state: string; // e.g. lobby | active | finished
-    players?: PlayerResponse[]; // Assumed shape; adjust to backend
-    timer_ms?: number; // Optional timer value
+export interface PlayerStatusSummary {
+    id: string;
+    name: string;
+    score?: number;
+    correct?: number;
+    answeredCurrent?: boolean;
 }
 
 export interface QuestionResponse {
     id: string;
-    text: string;
+    prompt: string;
     options: string[];
-    answer: string;
-    // Add other fields as needed
+    answer: string | null;
+    genre?: string | null;
+    difficulty?: string | null;
 }
 
 export interface QuestionsAddedResponseModel {
-    success: boolean;
-    question_id: string;
+    message: string;
+    question: string;
+    answer: string;
+    genre: string;
+    difficulty: string;
 }
 
 export interface GameResponse {
     code: string;
     name: string;
     status: string;
-    // Add other fields as needed
 }
 
-// --- API functions ---
+export interface GameStatusResponse {
+    session_code: string;
+    game_state: "waiting" | "active" | "completed";
+    current_question_index: number;
+    total_questions: number;
+    current_question: QuestionResponse | null;
+    player_response_counts: {
+        total: number;
+        answered: number;
+        waiting_for: number;
+    };
+    players?: PlayerStatusSummary[];
+    started_at?: string | null;
+    ended_at?: string | null;
+}
+
+export interface JoinGameResponse {
+    message: string;
+    player_id: string;
+    id?: string;
+    session_code: string;
+}
+
+export interface SubmitAnswerResponse {
+    player_answer: string;
+    is_correct: boolean;
+    game_state: Record<string, unknown>;
+}
+
+type BackendScore = {
+    score_id: string;
+    score: number;
+    result?: string | null;
+    player_id: string;
+    session_code: string;
+};
+
+type BackendPlayer = {
+    player_id: string;
+    player_name: string;
+    player_email: string;
+    player_mobile?: string | null;
+    hashed_password?: string;
+    active_game_code?: string | null;
+};
+
+type BackendGame = {
+    game_code: string;
+    genre: string;
+    rules: string;
+    message?: string;
+};
+
+type BackendGameSession = {
+    session_code: string;
+    host_name: string;
+    number_of_questions: number;
+    game_code: string;
+};
+
+type BackendGameStatus = {
+    session_code: string;
+    is_active: boolean;
+    is_waiting_for_players: boolean;
+    current_question_index: number;
+    total_questions: number;
+    current_question?: {
+        question_id: string | null;
+        question: string | null;
+        genre: string | null;
+        difficulty?: string | null;
+        answer?: string | null;
+    };
+    players?: {
+        total: number;
+        answered: number;
+        waiting_for: number;
+    };
+    started_at?: string | null;
+    ended_at?: string | null;
+};
+
+type BackendQuestion = {
+    question_id?: string | null;
+    question?: string | null;
+    answer?: string | null;
+    genre?: string | null;
+    difficulty?: string | null;
+    options?: string[] | null;
+    message?: string;
+    question_index?: number;
+    total_questions?: number;
+    is_waiting_for_players?: boolean;
+    is_active?: boolean;
+};
+
+const mapScore = (raw: BackendScore): ScoresResponseModel => ({
+    score_id: raw.score_id,
+    player_id: raw.player_id,
+    score: raw.score ?? 0,
+    result: raw.result ?? null,
+    session_code: raw.session_code,
+});
+
+const mapPlayer = (raw: BackendPlayer): PlayerResponse => ({
+    player_id: raw.player_id,
+    player_name: raw.player_name,
+    player_email: raw.player_email,
+    player_mobile: raw.player_mobile ?? null,
+    active_game_code: raw.active_game_code ?? null,
+});
+
+const mapGame = (raw: BackendGame): GameResponse => ({
+    code: raw.game_code,
+    name: raw.genre,
+    status: raw.rules,
+});
+
+const mapSession = (raw: BackendGameSession): GameResponse => ({
+    code: raw.session_code,
+    name: raw.host_name ?? raw.session_code,
+    status: "waiting",
+});
+
+const mapQuestion = (raw: BackendQuestion): QuestionResponse => ({
+    id: raw.question_id ?? "",
+    prompt: raw.question ?? raw.message ?? "",
+    options: Array.isArray(raw.options)
+        ? raw.options.filter(
+              (option): option is string => typeof option === "string"
+          )
+        : [],
+    answer: raw.answer ?? null,
+    genre: raw.genre ?? null,
+    difficulty: raw.difficulty ?? null,
+});
+
+const mapGameStatus = (raw: BackendGameStatus): GameStatusResponse => {
+    const total = raw.players?.total ?? 0;
+    const answered = raw.players?.answered ?? 0;
+    const waiting = raw.players?.waiting_for ?? Math.max(total - answered, 0);
+
+    const current_question = raw.current_question?.question_id
+        ? mapQuestion(raw.current_question)
+        : null;
+
+    return {
+        session_code: raw.session_code,
+        game_state: raw.is_active
+            ? "active"
+            : raw.is_waiting_for_players
+            ? "waiting"
+            : "completed",
+        current_question_index: raw.current_question_index,
+        total_questions: raw.total_questions,
+        current_question,
+        player_response_counts: {
+            total,
+            answered,
+            waiting_for: waiting,
+        },
+        players: [],
+        started_at: raw.started_at ?? null,
+        ended_at: raw.ended_at ?? null,
+    };
+};
+
+export interface CreateQuestionRequest {
+    question: string;
+    answer: string;
+    genre: string;
+    difficulty: string;
+}
+
+export interface CreatePlayerRequest {
+    player_name: string;
+    player_email: string;
+    hashed_password: string;
+    player_mobile?: string;
+    game_code?: string;
+}
+
+export interface CreateGameRequest {
+    genre: string;
+    rules: string;
+}
+
+export interface CreateSessionRequest {
+    game_code: string;
+    host_name?: string;
+    number_of_questions?: number;
+}
+
+export interface SubmitAnswerRequest {
+    player_id: string;
+    session_code: string;
+    question_id: string;
+    answer: string;
+}
+
+export interface JoinGameRequest {
+    player_id: string;
+    session_code: string;
+}
+
+export interface LoginRequest {
+    player_email: string;
+    password: string;
+}
+
+export interface LoginResponse {
+    access_token: string;
+    token_type: string;
+}
+
+export interface PasswordResetRequest {
+    phone_number: string;
+}
+
+export interface PasswordVerifyRequest {
+    phone_number: string;
+    otp: string;
+}
+
+export interface PasswordUpdateRequest {
+    phone_number: string;
+    new_password: string;
+}
+
+export interface PasswordResetResponse {
+    message: string;
+}
+
+export interface PasswordUpdateResponse {
+    message: string;
+    access_token: string;
+    token_type: string;
+}
 
 export async function getScores(
     session_code: string
 ): Promise<ScoresResponseModel[]> {
-    const res = await fetch(`${API_URL}/${session_code}`);
-    if (!res.ok) throw new Error("Failed to fetch scores");
-    return res.json();
+    const raw = await apiFetch<BackendScore[]>(
+        `/scores/${encodeURIComponent(session_code)}`
+    );
+    return raw.map(mapScore);
 }
 
 export async function getQuestion(
     question_id: string
 ): Promise<QuestionResponse> {
-    const res = await fetch(`${API_URL}/${question_id}`);
-    if (!res.ok) throw new Error("Failed to fetch question");
-    return res.json();
+    const raw = await apiFetch<BackendQuestion>(
+        `/questions/${encodeURIComponent(question_id)}`
+    );
+    return mapQuestion(raw);
 }
 
 export async function addQuestion(
-    data: Partial<QuestionResponse>
+    data: CreateQuestionRequest
 ): Promise<QuestionsAddedResponseModel> {
-    const res = await fetch(`${API_URL}/add`, {
+    return apiFetch<QuestionsAddedResponseModel>("/questions/add", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Failed to add question");
-    return res.json();
 }
 
-export async function createPlayer(data: {
-    name: string;
-    session_code: string;
-}): Promise<PlayerResponse> {
-    const res = await fetch(`${API_URL}/create`, {
+export async function createPlayer(
+    data: CreatePlayerRequest
+): Promise<PlayerResponse> {
+    const raw = await apiFetch<BackendPlayer>("/players/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Failed to create player");
-    return res.json();
+    return mapPlayer(raw);
 }
 
 export async function getPlayer(player_id: string): Promise<PlayerResponse> {
-    const res = await fetch(`${API_URL}/${player_id}`);
-    if (!res.ok) throw new Error("Failed to fetch player");
-    return res.json();
+    const raw = await apiFetch<BackendPlayer>(
+        `/players/${encodeURIComponent(player_id)}`
+    );
+    return mapPlayer(raw);
 }
 
 export async function getPlayers(): Promise<PlayerResponse[]> {
-    const res = await fetch(`${API_URL}/`);
-    if (!res.ok) throw new Error("Failed to fetch players");
-    return res.json();
+    const raw = await apiFetch<BackendPlayer[]>("/players/");
+    return raw.map(mapPlayer);
 }
 
 export async function deletePlayer(player_id: string): Promise<void> {
-    const res = await fetch(`${API_URL}/${player_id}`, { method: "DELETE" });
-    if (!res.ok) throw new Error("Failed to delete player");
+    await apiFetch<void>(
+        `/players/${encodeURIComponent(player_id)}`,
+        { method: "DELETE" },
+        false
+    );
 }
 
 export async function updatePlayer(
     player_id: string,
-    name: string
+    data: Partial<CreatePlayerRequest>
 ): Promise<PlayerResponse> {
-    const res = await fetch(`${API_URL}/${player_id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-    });
-    if (!res.ok) throw new Error("Failed to update player");
-    return res.json();
+    const raw = await apiFetch<BackendPlayer>(
+        `/players/${encodeURIComponent(player_id)}`,
+        {
+            method: "PUT",
+            body: JSON.stringify(data),
+        }
+    );
+    return mapPlayer(raw);
 }
 
-export async function submitAnswer(data: {
-    player_id: string;
-    session_code: string;
-    question_id: string;
-    answer: string;
-}): Promise<any> {
-    const res = await fetch(`${API_URL}/submit-answer`, {
+export async function submitAnswer(
+    data: SubmitAnswerRequest
+): Promise<SubmitAnswerResponse> {
+    const payload = {
+        player_id: data.player_id,
+        session_code: data.session_code,
+        question_id: data.question_id,
+        player_answer: data.answer,
+    };
+
+    return apiFetch<SubmitAnswerResponse>("/game-logic/submit-answer", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to submit answer");
-    return res.json();
 }
 
 export async function getSessionStatus(
     session_code: string
 ): Promise<GameStatusResponse> {
-    const res = await fetch(`${API_URL}/status/${session_code}`);
-    if (!res.ok) throw new Error("Failed to fetch session status");
-    return res.json();
+    const raw = await apiFetch<BackendGameStatus>(
+        `/game-logic/status/${encodeURIComponent(session_code)}`
+    );
+    return mapGameStatus(raw);
 }
 
 export async function getCurrentQuestion(
     session_code: string
 ): Promise<QuestionResponse> {
-    const res = await fetch(`${API_URL}/current-question/${session_code}`);
-    if (!res.ok) throw new Error("Failed to fetch current question");
-    return res.json();
+    const raw = await apiFetch<BackendQuestion>(
+        `/game-logic/current-question/${encodeURIComponent(session_code)}`
+    );
+    return mapQuestion(raw);
 }
 
-export async function createGame(data: {
-    name: string;
-}): Promise<GameResponse> {
-    const res = await fetch(`${API_URL}/`, {
+export async function createGame(
+    data: CreateGameRequest
+): Promise<GameResponse> {
+    const raw = await apiFetch<BackendGame>("/game/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Failed to create game");
-    return res.json();
+    return mapGame(raw);
 }
 
-export async function createSession(data: {
-    game_code: string;
-}): Promise<GameResponse> {
-    const res = await fetch(`${API_URL}/create/session`, {
+export async function createSession(
+    data: CreateSessionRequest
+): Promise<GameResponse> {
+    const payload = {
+        game_code: data.game_code,
+        host_name: data.host_name ?? "Host",
+        number_of_questions: data.number_of_questions ?? 5,
+    };
+
+    const raw = await apiFetch<BackendGameSession>("/game/create/session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error("Failed to create session");
-    return res.json();
+
+    return mapSession(raw);
 }
 
 export async function getGameSession(game_code: string): Promise<GameResponse> {
-    const res = await fetch(`${API_URL}/${game_code}`);
-    if (!res.ok) throw new Error("Failed to fetch game session");
-    return res.json();
+    const raw = await apiFetch<BackendGame>(
+        `/game/${encodeURIComponent(game_code)}`
+    );
+    return mapGame(raw);
 }
 
 export async function getGames(): Promise<GameResponse[]> {
-    const res = await fetch(`${API_URL}/`);
-    if (!res.ok) throw new Error("Failed to fetch games");
-    return res.json();
+    const raw = await apiFetch<BackendGame[]>("/game/");
+    return raw.map(mapGame);
 }
 
-export async function joinGameSession(data: {
-    player_id: string;
-    session_code: string;
-}): Promise<any> {
-    const res = await fetch(`${API_URL}/join`, {
+export async function joinGameSession(
+    data: JoinGameRequest
+): Promise<JoinGameResponse> {
+    const raw = await apiFetch<{ message: string }>("/game/join", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Failed to join game session");
-    return res.json();
+
+    return {
+        message: raw.message,
+        player_id: data.player_id,
+        session_code: data.session_code,
+    };
+}
+
+export async function login(data: LoginRequest): Promise<LoginResponse> {
+    return apiFetch<LoginResponse>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function requestPasswordReset(
+    data: PasswordResetRequest
+): Promise<PasswordResetResponse> {
+    return apiFetch<PasswordResetResponse>("/password-reset/request", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function verifyPasswordReset(
+    data: PasswordVerifyRequest
+): Promise<PasswordResetResponse> {
+    return apiFetch<PasswordResetResponse>("/password-reset/verify", {
+        method: "POST",
+        body: JSON.stringify(data),
+    });
+}
+
+export async function updatePassword(
+    data: PasswordUpdateRequest
+): Promise<PasswordUpdateResponse> {
+    return apiFetch<PasswordUpdateResponse>("/password-reset/update", {
+        method: "PUT",
+        body: JSON.stringify(data),
+    });
 }

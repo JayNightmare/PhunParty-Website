@@ -4,14 +4,20 @@ import { useEffect, useState } from "react";
 import {
     getSessionStatus,
     getScores,
+    getPlayer,
     GameStatusResponse,
     ScoresResponseModel,
+    PlayerResponse,
 } from "@/lib/api";
+
+type ScoreWithPlayer = ScoresResponseModel & {
+    name: string;
+};
 
 export default function PostGameStats() {
     const { sessionId } = useParams();
     const [status, setStatus] = useState<GameStatusResponse | null>(null);
-    const [scores, setScores] = useState<ScoresResponseModel[]>([]);
+    const [scores, setScores] = useState<ScoreWithPlayer[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +31,29 @@ export default function PostGameStats() {
                     getScores(sessionId).catch(() => []),
                 ]);
                 if (st) setStatus(st);
-                if (sc) setScores(sc);
+                if (sc && sc.length > 0) {
+                    // Fetch player names for each score
+                    const scoresWithNames: ScoreWithPlayer[] =
+                        await Promise.all(
+                            sc.map(async (score) => {
+                                try {
+                                    const player = await getPlayer(
+                                        score.player_id
+                                    );
+                                    return {
+                                        ...score,
+                                        name: player.player_name,
+                                    };
+                                } catch {
+                                    return {
+                                        ...score,
+                                        name: score.player_id, // Fallback to player ID
+                                    };
+                                }
+                            })
+                        );
+                    setScores(scoresWithNames);
+                }
             } catch (err: any) {
                 setError(err.message || "Failed to load stats");
             } finally {
