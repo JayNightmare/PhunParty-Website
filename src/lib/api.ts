@@ -432,6 +432,14 @@ export interface CreatePlayerRequest {
     game_code?: string;
 }
 
+export interface PlayerUpdateRequest {
+    player_name?: string;
+    player_email?: string;
+    player_mobile?: string;
+    hashed_password?: string;
+    game_code?: string;
+}
+
 export interface LoginRequest {
     player_email: string;
     password: string;
@@ -542,7 +550,7 @@ export async function deletePlayer(player_id: string): Promise<void> {
 
 export async function updatePlayer(
     player_id: string,
-    data: Partial<CreatePlayerRequest>
+    data: PlayerUpdateRequest
 ): Promise<PlayerResponse> {
     const raw = await apiFetch<BackendPlayer>(
         `/players/${encodeURIComponent(player_id)}`,

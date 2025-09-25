@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import Card from "@/components/Card";
 import { useAuth } from "@/contexts/AuthContext";
-import { updatePlayer } from "@/lib/api";
+import { updatePlayer, PlayerUpdateRequest } from "@/lib/api";
 
 export default function EditProfile() {
     const { user, isLoading: authLoading } = useAuth();
@@ -77,11 +77,15 @@ export default function EditProfile() {
                 );
             }
 
-            const payload = {
+            const payload: PlayerUpdateRequest = {
                 player_name: formData.name.trim(),
                 player_email: formData.email.trim(),
-                player_mobile: formData.mobile.trim() || undefined,
             };
+
+            // Only include mobile if it has a value
+            if (formData.mobile.trim()) {
+                payload.player_mobile = formData.mobile.trim();
+            }
 
             const updated = await updatePlayer(user.id, payload);
 
