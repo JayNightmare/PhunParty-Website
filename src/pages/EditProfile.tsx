@@ -89,7 +89,7 @@ export default function EditProfile() {
                 ...user,
                 name: updated.player_name,
                 email: updated.player_email,
-                // mobile: updated.player_mobile || "",
+                mobile: updated.player_mobile || "",
             };
 
             Object.assign(user, updatedUser);

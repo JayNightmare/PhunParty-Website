@@ -440,6 +440,13 @@ export interface LoginRequest {
 export interface LoginResponse {
     access_token: string;
     token_type: string;
+    user: {
+        player_id: string;
+        player_name: string;
+        player_email: string;
+        player_mobile?: string | null;
+        active_game_code?: string | null;
+    };
 }
 
 export interface PasswordResetRequest {

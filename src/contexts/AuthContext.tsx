@@ -99,14 +99,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setToken(authToken);
             localStorage.setItem("auth_token", authToken);
 
-            // Create user object (in a real app, you'd get this from the login response)
-            // For now, we'll extract from email
+            // Create user object from the login response
             const userData: User = {
-                id: `user_${Date.now()}`, // This should come from the API
-                name: email.split("@")[0], // Temporary - should come from API
-                email,
-                mobile: undefined,
-                active_game_code: undefined,
+                id: response.user.player_id,
+                name: response.user.player_name,
+                email: response.user.player_email,
+                mobile: response.user.player_mobile || undefined,
+                active_game_code: response.user.active_game_code || undefined,
             };
 
             setUser(userData);
@@ -137,16 +136,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         try {
             // Send plain password - the backend will hash it properly with bcrypt
             const registerData: CreatePlayerRequest = {
-                player_name: userData.name,
-                player_email: userData.email,
-                player_mobile: userData.mobile,
-                password: userData.password, // Backend expects plain password and does bcrypt hashing
+                player_name: userData.player_name,
+                player_email: userData.player_email,
+                player_mobile: userData.player_mobile,
+                hashed_password: userData.password, // Backend expects plain password and does bcrypt hashing
             };
 
             const response = await createPlayer(registerData);
 
             // After successful registration, log them in
-            await handleLogin(userData.email, userData.password);
+            await handleLogin(userData.player_email, userData.password);
         } catch (err: any) {
             setError(err.message || "Registration failed");
             throw err;
