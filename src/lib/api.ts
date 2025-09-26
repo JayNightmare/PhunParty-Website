@@ -685,9 +685,24 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
     }
 
     const responseText = await response.text();
+    console.log("Login response text:", responseText);
 
     try {
-        return JSON.parse(responseText) as LoginResponse;
+        const parsedResponse = JSON.parse(responseText) as LoginResponse;
+        console.log("Parsed login response:", parsedResponse);
+
+        // Validate the response structure
+        if (!parsedResponse.access_token) {
+            throw new Error("Login response missing access_token");
+        }
+        if (!parsedResponse.user) {
+            throw new Error("Login response missing user object");
+        }
+        if (!parsedResponse.user.player_id) {
+            throw new Error("Login response user object missing player_id");
+        }
+
+        return parsedResponse;
     } catch (error) {
         console.error("JSON parse error. Response text:", responseText);
         throw new Error(

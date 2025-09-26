@@ -5,13 +5,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { updatePlayer, PlayerUpdateRequest } from "@/lib/api";
 
 export default function EditProfile() {
-    const { user, isLoading: authLoading } = useAuth();
+    const { user, updateUser, isLoading: authLoading } = useAuth();
     const navigate = useNavigate();
 
     const [formData, setFormData] = useState({
-        name: "",
-        email: "",
-        mobile: "",
+        player_name: "",
+        player_email: "",
+        player_mobile: "",
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -21,9 +21,9 @@ export default function EditProfile() {
     useEffect(() => {
         if (user) {
             setFormData({
-                name: user.name || "",
-                email: user.email || "",
-                mobile: user.mobile || "",
+                player_name: user.name || "",
+                player_email: user.email || "",
+                player_mobile: user.mobile || "",
             });
         }
     }, [user]);
@@ -51,20 +51,20 @@ export default function EditProfile() {
         setSuccess(false);
 
         // Validation
-        if (!formData.name.trim()) {
+        if (!formData.player_name.trim()) {
             setError("Name is required");
             setLoading(false);
             return;
         }
 
-        if (!formData.email.trim()) {
+        if (!formData.player_email.trim()) {
             setError("Email is required");
             setLoading(false);
             return;
         }
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(formData.email)) {
+        if (!emailRegex.test(formData.player_email)) {
             setError("Please enter a valid email address");
             setLoading(false);
             return;
@@ -78,26 +78,22 @@ export default function EditProfile() {
             }
 
             const payload: PlayerUpdateRequest = {
-                player_name: formData.name.trim(),
-                player_email: formData.email.trim(),
+                player_name: formData.player_name.trim(),
+                player_email: formData.player_email.trim(),
             };
 
             // Only include mobile if it has a value
-            if (formData.mobile.trim()) {
-                payload.player_mobile = formData.mobile.trim();
+            if (formData.player_mobile.trim()) {
+                payload.player_mobile = formData.player_mobile.trim();
             }
 
             const updated = await updatePlayer(user.id, payload);
 
-            const updatedUser = {
-                ...user,
+            updateUser({
                 name: updated.player_name,
                 email: updated.player_email,
-                mobile: updated.player_mobile || "",
-            };
-
-            Object.assign(user, updatedUser);
-            localStorage.setItem("auth_user", JSON.stringify(updatedUser));
+                mobile: updated.player_mobile || undefined,
+            });
 
             setSuccess(true);
 
@@ -164,8 +160,8 @@ export default function EditProfile() {
                         <input
                             type="text"
                             id="name"
-                            name="name"
-                            value={formData.name}
+                            name="player_name"
+                            value={formData.player_name}
                             onChange={handleChange}
                             className="w-full px-4 py-2 bg-ink-800 border border-ink-600 rounded-xl text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-tea-500 focus:border-transparent"
                             placeholder="Enter your full name"
@@ -183,8 +179,8 @@ export default function EditProfile() {
                         <input
                             type="email"
                             id="email"
-                            name="email"
-                            value={formData.email}
+                            name="player_email"
+                            value={formData.player_email}
                             onChange={handleChange}
                             className="w-full px-4 py-2 bg-ink-800 border border-ink-600 rounded-xl text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-tea-500 focus:border-transparent"
                             placeholder="Enter your email address"
@@ -203,8 +199,8 @@ export default function EditProfile() {
                         <input
                             type="tel"
                             id="mobile"
-                            name="mobile"
-                            value={formData.mobile}
+                            name="player_mobile"
+                            value={formData.player_mobile}
                             onChange={handleChange}
                             className="w-full px-4 py-2 bg-ink-800 border border-ink-600 rounded-xl text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-tea-500 focus:border-transparent"
                             placeholder="Enter your mobile number"

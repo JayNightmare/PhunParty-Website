@@ -28,6 +28,7 @@ interface AuthContextType {
     login: (email: string, password: string) => Promise<void>;
     register: (userData: RegisterData) => Promise<void>;
     logout: () => void;
+    updateUser: (userData: Partial<User>) => void;
     isLoading: boolean;
     error: string | null;
     clearError: () => void;
@@ -93,6 +94,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 password,
             };
             const response = await login(loginData);
+
+            // Validate response structure
+            if (!response) {
+                throw new Error("No response received from login");
+            }
+            if (!response.user) {
+                console.error("Login response:", response);
+                throw new Error("Invalid login response: missing user data");
+            }
+            if (!response.user.player_id) {
+                console.error("Login user object:", response.user);
+                throw new Error(
+                    "Invalid login response: user missing player_id"
+                );
+            }
 
             // Store token
             const authToken = response.access_token;
@@ -162,6 +178,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setError(null);
     };
 
+    const handleUpdateUser = (userData: Partial<User>) => {
+        if (user) {
+            const updatedUser = { ...user, ...userData };
+            setUser(updatedUser);
+            localStorage.setItem("auth_user", JSON.stringify(updatedUser));
+        }
+    };
+
     const clearError = () => setError(null);
 
     const setCORSHelper = (show: boolean) => setShowCORSHelper(show);
@@ -172,6 +196,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         login: handleLogin,
         register: handleRegister,
         logout: handleLogout,
+        updateUser: handleUpdateUser,
         isLoading,
         error,
         clearError,
