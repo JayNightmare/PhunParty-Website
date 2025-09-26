@@ -535,6 +535,47 @@ export async function getPlayer(player_id: string): Promise<PlayerResponse> {
     return mapPlayer(raw);
 }
 
+async function getPlayerWithToken(
+    player_id: string,
+    token: string
+): Promise<PlayerResponse> {
+    const headers = new Headers();
+    if (API_KEY) {
+        headers.set("x-api-key", API_KEY);
+    }
+    headers.set("Authorization", `Bearer ${token}`);
+    headers.set("Accept", "application/json");
+
+    const response = await fetch(
+        buildUrl(`/players/${encodeURIComponent(player_id)}`),
+        {
+            method: "GET",
+            headers,
+        }
+    );
+
+    if (!response.ok) {
+        let message: string | undefined;
+        try {
+            message = await response.text();
+        } catch {
+            message = undefined;
+        }
+        throw new Error(
+            message || `Request failed with status ${response.status}`
+        );
+    }
+
+    const responseText = await response.text();
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(`Expected JSON response but received: ${contentType}`);
+    }
+
+    const raw = JSON.parse(responseText) as BackendPlayer;
+    return mapPlayer(raw);
+}
+
 export async function getPlayers(): Promise<PlayerResponse[]> {
     const raw = await apiFetch<BackendPlayer[]>("/players/");
     return raw.map(mapPlayer);
@@ -688,28 +729,78 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
     console.log("Login response text:", responseText);
 
     try {
-        const parsedResponse = JSON.parse(responseText) as LoginResponse;
+        const parsedResponse = JSON.parse(responseText);
         console.log("Parsed login response:", parsedResponse);
 
-        // Validate the response structure
+        // Validate the basic response structure
         if (!parsedResponse.access_token) {
             throw new Error("Login response missing access_token");
         }
+
+        // If the response doesn't have user data, we need to fetch it separately
         if (!parsedResponse.user) {
-            throw new Error("Login response missing user object");
+            console.log(
+                "Login response missing user object, will fetch separately"
+            );
+
+            // Try to decode the JWT token to get the player ID
+            const token = parsedResponse.access_token;
+            const base64Url = token.split(".")[1];
+            const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+            const jsonPayload = decodeURIComponent(
+                atob(base64)
+                    .split("")
+                    .map(function (c) {
+                        return (
+                            "%" +
+                            ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+                        );
+                    })
+                    .join("")
+            );
+
+            const decodedToken = JSON.parse(jsonPayload);
+            console.log("Decoded JWT token:", decodedToken);
+
+            if (!decodedToken.sub) {
+                throw new Error("JWT token missing subject (player ID)");
+            }
+
+            // Fetch user data using the player ID from the token
+            const playerData = await getPlayerWithToken(
+                decodedToken.sub,
+                parsedResponse.access_token
+            );
+
+            // Construct the expected LoginResponse format
+            const loginResponse: LoginResponse = {
+                access_token: parsedResponse.access_token,
+                token_type: parsedResponse.token_type,
+                user: {
+                    player_id: playerData.player_id,
+                    player_name: playerData.player_name,
+                    player_email: playerData.player_email,
+                    player_mobile: playerData.player_mobile,
+                    active_game_code: playerData.active_game_code,
+                },
+            };
+
+            return loginResponse;
         }
+
+        // If user data is present, validate it
         if (!parsedResponse.user.player_id) {
             throw new Error("Login response user object missing player_id");
         }
 
-        return parsedResponse;
+        return parsedResponse as LoginResponse;
     } catch (error) {
-        console.error("JSON parse error. Response text:", responseText);
+        console.error("Login parsing/processing error:", error);
+        console.error("Response text:", responseText);
         throw new Error(
-            `Failed to parse login response: ${error}. Response: ${responseText.substring(
-                0,
-                200
-            )}...`
+            `Failed to process login response: ${
+                error instanceof Error ? error.message : error
+            }`
         );
     }
 }

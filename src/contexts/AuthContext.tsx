@@ -103,12 +103,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 console.error("Login response:", response);
                 throw new Error("Invalid login response: missing user data");
             }
-            if (!response.user.player_id) {
-                console.error("Login user object:", response.user);
-                throw new Error(
-                    "Invalid login response: user missing player_id"
-                );
-            }
 
             // Store token
             const authToken = response.access_token;
