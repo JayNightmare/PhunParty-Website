@@ -1,6 +1,6 @@
 import { useNavigate, Navigate } from "react-router-dom";
 import Card from "@/components/Card";
-import { createSession, getGameTypes } from "@/lib/api";
+import { createSession, getGames, GameResponse } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { Difficulty } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,11 +14,11 @@ export default function NewSession() {
     const [hostName, setHostName] = useState("");
     const [num, setNum] = useState(5);
     const [difficulty, setDifficulty] = useState<Difficulty>("Easy");
-    const [availableGameTypes, setAvailableGameTypes] = useState<string[]>([]);
-    const [selectedGameType, setSelectedGameType] = useState("");
+    const [availableGames, setAvailableGames] = useState<GameResponse[]>([]);
+    const [selectedGameCode, setSelectedGameCode] = useState("");
 
     const [loading, setLoading] = useState(false);
-    const [loadingGameTypes, setLoadingGameTypes] = useState(false);
+    const [loadingGames, setLoadingGames] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     // Set default host name from authenticated user
@@ -28,27 +28,26 @@ export default function NewSession() {
         }
     }, [user]);
 
-    // Load available game types on component mount
+    // Load available games on component mount
     useEffect(() => {
-        const loadGameTypes = async () => {
+        const loadGames = async () => {
             try {
-                setLoadingGameTypes(true);
-                const gameTypes = await getGameTypes();
-                setAvailableGameTypes(gameTypes);
-                if (gameTypes.length > 0) {
-                    setSelectedGameType(gameTypes[0]);
+                setLoadingGames(true);
+                const games = await getGames();
+                setAvailableGames(games);
+                if (games.length > 0) {
+                    setSelectedGameCode(games[0].code);
                 }
             } catch (err) {
-                console.error("Failed to load available game types:", err);
-                // Set default fallback
-                const fallbackTypes = ["trivia", "speed-round"];
-                setAvailableGameTypes(fallbackTypes);
-                setSelectedGameType(fallbackTypes[0]);
+                console.error("Failed to load available games:", err);
+                // Set empty state on error
+                setAvailableGames([]);
+                setSelectedGameCode("");
             } finally {
-                setLoadingGameTypes(false);
+                setLoadingGames(false);
             }
         };
-        loadGameTypes();
+        loadGames();
     }, []);
 
     // Redirect to login if not authenticated
@@ -77,8 +76,8 @@ export default function NewSession() {
             return;
         }
 
-        if (!selectedGameType) {
-            setError("Please select a game type");
+        if (!selectedGameCode) {
+            setError("Please select a game");
             setLoading(false);
             return;
         }
@@ -87,7 +86,7 @@ export default function NewSession() {
             const session = await createSession({
                 host_name: hostName.trim(),
                 number_of_questions: num,
-                game_code: selectedGameType, // Use game type as game code
+                game_code: selectedGameCode, // Use actual game code
             });
             showSuccess(
                 `Game session created successfully! Code: ${session.code}`
@@ -138,25 +137,24 @@ export default function NewSession() {
                     </div>
                     <div>
                         <label className="block text-sm text-stone-300 mb-1">
-                            Game Type
+                            Game
                         </label>
-                        {loadingGameTypes ? (
+                        {loadingGames ? (
                             <div className="px-4 py-3 rounded-2xl bg-ink-700 text-stone-400">
-                                Loading game types...
+                                Loading games...
                             </div>
                         ) : (
                             <select
-                                aria-label="Game Type"
-                                value={selectedGameType}
+                                aria-label="Game"
+                                value={selectedGameCode}
                                 onChange={(e) =>
-                                    setSelectedGameType(e.target.value)
+                                    setSelectedGameCode(e.target.value)
                                 }
                                 className="w-full px-4 py-3 rounded-2xl bg-ink-700"
                             >
-                                {availableGameTypes.map((gameType) => (
-                                    <option key={gameType} value={gameType}>
-                                        {gameType.charAt(0).toUpperCase() +
-                                            gameType.slice(1).replace("-", " ")}
+                                {availableGames.map((game) => (
+                                    <option key={game.code} value={game.code}>
+                                        {game.name} ({game.code})
                                     </option>
                                 ))}
                             </select>
