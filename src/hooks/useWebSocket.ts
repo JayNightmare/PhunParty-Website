@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import {
+    BackendWebSocketResponse,
+    BackendWebSocketMessage,
+    parseBackendMessage,
+    formatMessageForBackend,
+} from "@/lib/websocket";
 
 export interface WebSocketMessage {
     type: string;
@@ -13,6 +19,8 @@ export interface UseWebSocketOptions {
     onDisconnect?: () => void;
     onError?: (error: Event) => void;
     onMessage?: (message: WebSocketMessage) => void;
+    enableHeartbeat?: boolean;
+    heartbeatInterval?: number;
 }
 
 export interface UseWebSocketReturn {
@@ -35,6 +43,8 @@ const useWebSocket = (
         onDisconnect,
         onError,
         onMessage,
+        enableHeartbeat = true,
+        heartbeatInterval = 30000,
     } = options;
 
     const [isConnected, setIsConnected] = useState(false);
@@ -45,6 +55,7 @@ const useWebSocket = (
 
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const heartbeatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectCountRef = useRef(0);
     const shouldReconnectRef = useRef(true);
 
@@ -58,23 +69,39 @@ const useWebSocket = (
             wsRef.current = new WebSocket(url);
 
             wsRef.current.onopen = () => {
+                console.log("WebSocket connected to:", url);
                 setIsConnected(true);
                 setIsReconnecting(false);
                 reconnectCountRef.current = 0;
+
+                // Start heartbeat
+                if (enableHeartbeat) {
+                    startHeartbeat();
+                }
+
                 onConnect?.();
             };
 
-            wsRef.current.onclose = () => {
+            wsRef.current.onclose = (event) => {
+                console.log("WebSocket closed:", event.code, event.reason);
                 setIsConnected(false);
                 setIsReconnecting(false);
+
+                // Stop heartbeat
+                stopHeartbeat();
+
                 onDisconnect?.();
 
                 // Auto-reconnect if enabled and within limits
                 if (
                     shouldReconnectRef.current &&
-                    reconnectCountRef.current < reconnectAttempts
+                    reconnectCountRef.current < reconnectAttempts &&
+                    event.code !== 4004 // Don't reconnect if session not found
                 ) {
                     reconnectCountRef.current++;
+                    console.log(
+                        `Attempting to reconnect (${reconnectCountRef.current}/${reconnectAttempts})...`
+                    );
                     reconnectTimeoutRef.current = setTimeout(() => {
                         connect();
                     }, reconnectInterval);
@@ -82,17 +109,33 @@ const useWebSocket = (
             };
 
             wsRef.current.onerror = (error) => {
+                console.error("WebSocket error:", error);
                 setIsConnected(false);
                 onError?.(error);
             };
 
             wsRef.current.onmessage = (event) => {
                 try {
-                    const message: WebSocketMessage = JSON.parse(event.data);
+                    const backendMessage: BackendWebSocketResponse = JSON.parse(
+                        event.data
+                    );
+
+                    // Handle pong responses for heartbeat
+                    if (backendMessage.type === "pong") {
+                        // Heartbeat response received
+                        return;
+                    }
+
+                    // Convert backend message format to frontend format
+                    const message = parseBackendMessage(backendMessage);
                     setLastMessage(message);
                     onMessage?.(message);
                 } catch (error) {
-                    console.error("Failed to parse WebSocket message:", error);
+                    console.error(
+                        "Failed to parse WebSocket message:",
+                        error,
+                        event.data
+                    );
                 }
             };
         } catch (error) {
@@ -108,6 +151,30 @@ const useWebSocket = (
         onMessage,
     ]);
 
+    const startHeartbeat = useCallback(() => {
+        if (heartbeatTimeoutRef.current) {
+            clearTimeout(heartbeatTimeoutRef.current);
+        }
+
+        heartbeatTimeoutRef.current = setTimeout(() => {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                // Send ping message
+                const pingMessage = formatMessageForBackend("ping");
+                wsRef.current.send(JSON.stringify(pingMessage));
+
+                // Schedule next heartbeat
+                startHeartbeat();
+            }
+        }, heartbeatInterval);
+    }, [heartbeatInterval]);
+
+    const stopHeartbeat = useCallback(() => {
+        if (heartbeatTimeoutRef.current) {
+            clearTimeout(heartbeatTimeoutRef.current);
+            heartbeatTimeoutRef.current = null;
+        }
+    }, []);
+
     const disconnect = useCallback(() => {
         shouldReconnectRef.current = false;
 
@@ -115,6 +182,8 @@ const useWebSocket = (
             clearTimeout(reconnectTimeoutRef.current);
             reconnectTimeoutRef.current = null;
         }
+
+        stopHeartbeat();
 
         if (wsRef.current) {
             wsRef.current.close();
@@ -124,20 +193,25 @@ const useWebSocket = (
         setIsConnected(false);
         setIsReconnecting(false);
         reconnectCountRef.current = 0;
-    }, []);
+    }, [stopHeartbeat]);
 
     const sendMessage = useCallback((message: WebSocketMessage) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             try {
-                wsRef.current.send(
-                    JSON.stringify({
-                        ...message,
-                        timestamp: Date.now(),
-                    })
+                // Convert frontend message format to backend format
+                const backendMessage = formatMessageForBackend(
+                    message.type,
+                    message.payload
                 );
+                wsRef.current.send(JSON.stringify(backendMessage));
             } catch (error) {
                 console.error("Failed to send WebSocket message:", error);
             }
+        } else {
+            console.warn(
+                "WebSocket not connected, cannot send message:",
+                message
+            );
         }
     }, []);
 
@@ -151,6 +225,13 @@ const useWebSocket = (
             disconnect();
         };
     }, [url, connect, disconnect]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            stopHeartbeat();
+        };
+    }, [stopHeartbeat]);
 
     return {
         isConnected,

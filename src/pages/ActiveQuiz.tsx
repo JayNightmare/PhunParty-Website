@@ -19,6 +19,8 @@ import GameControls from "@/components/GameControls";
 import GameStateIndicator from "@/components/GameStateIndicator";
 import { useToast } from "@/hooks/useToast";
 import { useTouchGestures } from "@/hooks/useTouchGestures";
+import { useWebSocketGameControls } from "@/hooks/useWebSocketGameControls";
+import WebSocketStatus from "@/components/WebSocketStatus";
 
 export default function ActiveQuiz() {
     const { sessionId } = useParams();
@@ -40,10 +42,17 @@ export default function ActiveQuiz() {
         error,
         lastUpdate,
         refetch,
+        sendMessage,
     } = useGameUpdates({
         sessionCode: sessionId || "",
         enableWebSocket: true,
         pollInterval: 3000, // Fallback polling
+    });
+
+    // WebSocket game controls for real-time game management
+    const wsGameControls = useWebSocketGameControls({
+        sendMessage: sendMessage || (() => {}),
+        isConnected: isConnected,
     });
 
     // Touch gestures for swipe navigation and pull-to-refresh
@@ -201,10 +210,18 @@ export default function ActiveQuiz() {
     const handleNextQuestion = async () => {
         if (!sessionId) return;
         try {
-            const response = await nextQuestion({ session_code: sessionId });
-            if (response.success) {
-                success("Moved to next question");
-                await refetch();
+            // Try WebSocket first if connected, fallback to HTTP API
+            if (isConnected && wsGameControls) {
+                wsGameControls.nextQuestion();
+                success("Moving to next question via WebSocket...");
+            } else {
+                const response = await nextQuestion({
+                    session_code: sessionId,
+                });
+                if (response.success) {
+                    success("Moved to next question");
+                    await refetch();
+                }
             }
         } catch (error) {
             showError("Failed to go to next question");
@@ -229,10 +246,18 @@ export default function ActiveQuiz() {
     const handleEndGame = async () => {
         if (!sessionId) return;
         try {
-            const response = await endGame({ session_code: sessionId });
-            if (response.success) {
-                success("Game ended successfully");
-                navigate(`/stats/${sessionId}`);
+            // Try WebSocket first if connected, fallback to HTTP API
+            if (isConnected && wsGameControls) {
+                wsGameControls.endGame();
+                success("Ending game via WebSocket...");
+                // Navigate after a short delay to allow WebSocket message to process
+                setTimeout(() => navigate(`/stats/${sessionId}`), 1000);
+            } else {
+                const response = await endGame({ session_code: sessionId });
+                if (response.success) {
+                    success("Game ended successfully");
+                    navigate(`/stats/${sessionId}`);
+                }
             }
         } catch (error) {
             showError("Failed to end game");
@@ -315,14 +340,11 @@ export default function ActiveQuiz() {
                     <div className="flex items-center justify-between p-4 bg-ink-800 rounded-xl">
                         <div className="flex items-center gap-2">
                             <ConnectionIndicator size="sm" />
-                            <span className="text-sm text-stone-400">
-                                {isConnected ? "🟢 Real-time" : "🟡 Polling"}
-                            </span>
-                            {lastUpdate && (
-                                <span className="text-xs text-stone-500 ml-2">
-                                    Last: {lastUpdate.type}
-                                </span>
-                            )}
+                            <WebSocketStatus
+                                isConnected={isConnected}
+                                lastUpdate={lastUpdate?.type}
+                                className="text-stone-400"
+                            />
                         </div>
 
                         <Timer ms={30000} keyer={keyer} onEnd={next} />

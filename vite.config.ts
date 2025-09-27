@@ -14,12 +14,12 @@ export default defineConfig({
     server: {
         proxy: {
             "/api": {
-                target: "https://api.phun.party",
+                target: process.env.VITE_API_URL || "https://api.phun.party",
                 changeOrigin: true,
                 rewrite: (path) => path.replace(/^\/api/, ""),
                 configure: (proxy, _options) => {
                     proxy.on("error", (err, _req, _res) => {
-                        console.log("proxy error", err);
+                        console.log("HTTP proxy error", err);
                     });
                     proxy.on("proxyReq", (proxyReq, req, _res) => {
                         console.log(
@@ -35,6 +35,24 @@ export default defineConfig({
                             req.url
                         );
                     });
+                },
+            },
+            "/ws": {
+                target: (
+                    process.env.VITE_WS_URL || "ws://localhost:8000"
+                ).replace(/^ws/, "http"),
+                changeOrigin: true,
+                ws: true,
+                configure: (proxy, _options) => {
+                    proxy.on("error", (err, _req, _res) => {
+                        console.log("WebSocket proxy error", err);
+                    });
+                    proxy.on(
+                        "proxyReqWs",
+                        (proxyReq, req, socket, options, head) => {
+                            console.log("WebSocket proxy request:", req.url);
+                        }
+                    );
                 },
             },
         },

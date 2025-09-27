@@ -15,6 +15,7 @@ import ConnectionIndicator from "@/components/ConnectionIndicator";
 import MobileAnswerSelector from "@/components/MobileAnswerSelector";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { useTouchGestures } from "@/hooks/useTouchGestures";
+import { useWebSocketGameControls } from "@/hooks/useWebSocketGameControls";
 
 export default function Join() {
     const { sessionId } = useParams();
@@ -38,9 +39,16 @@ export default function Join() {
         isLoading: statusLoading,
         error: statusError,
         lastUpdate,
+        sendMessage,
     } = useGameUpdates({
         sessionCode: sessionId || "",
         enableWebSocket: true,
+    });
+
+    // WebSocket game controls for real-time interactions
+    const wsGameControls = useWebSocketGameControls({
+        sendMessage: sendMessage || (() => {}),
+        isConnected: isConnected,
     });
 
     // Enhanced touch gestures for mobile
@@ -165,14 +173,20 @@ export default function Join() {
         setSubmitLoading(true);
 
         try {
-            await submitAnswer({
-                player_id: myId,
-                session_code: sessionId,
-                question_id: question.id,
-                answer: v,
-            });
+            // Try WebSocket first if connected, fallback to HTTP API
+            if (isConnected && wsGameControls && sendMessage) {
+                wsGameControls.submitAnswer(myId, question.id, v);
+                showSuccess("Answer submitted via WebSocket!");
+            } else {
+                await submitAnswer({
+                    player_id: myId,
+                    session_code: sessionId,
+                    question_id: question.id,
+                    answer: v,
+                });
+                showSuccess("Answer submitted!");
+            }
             setVal("");
-            showSuccess("Answer submitted!");
         } catch (err: any) {
             const errorMsg = err.message || "Failed to submit answer";
             showError(errorMsg);
