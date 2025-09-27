@@ -701,6 +701,15 @@ export async function getGames(): Promise<GameResponse[]> {
     return raw.map(mapGame);
 }
 
+// Get unique game types (genres) from all available games
+export async function getGameTypes(): Promise<string[]> {
+    const games = await getGames();
+    const gameTypes = [
+        ...new Set(games.map((game) => game.name).filter(Boolean)),
+    ];
+    return gameTypes.length > 0 ? gameTypes : ["trivia", "speed-round"]; // fallback
+}
+
 // Get user's created sessions from localStorage
 export async function getUserSessions(): Promise<GameResponse[]> {
     const stored = localStorage.getItem("user_sessions");

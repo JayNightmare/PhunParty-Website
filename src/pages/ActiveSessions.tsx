@@ -166,18 +166,12 @@ export default function ActiveSessions() {
                             <div className="grid md:grid-cols-2 gap-4 items-start">
                                 <div className="flex flex-col items-center gap-3">
                                     <QR
-                                        value={
-                                            window.location.origin +
-                                            window.location.pathname +
-                                            `#/join/${focus}`
-                                        }
+                                        value={`https://phun.party/#/join/${focus}`}
                                     />
                                     <div className="text-xs text-stone-300">
                                         Scan or visit:{" "}
                                         <span className="underline">
-                                            {window.location.origin +
-                                                window.location.pathname +
-                                                `#/join/${focus}`}
+                                            https://phun.party/#/join/{focus}
                                         </span>
                                     </div>
                                 </div>
