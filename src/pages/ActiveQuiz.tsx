@@ -43,7 +43,13 @@ export default function ActiveQuiz() {
         error,
         lastUpdate,
         refetch,
+        connectedPlayers,
         sendMessage,
+        startGame,
+        nextQuestion: wsNextQuestion,
+        endGame: wsEndGame,
+        submitAnswer,
+        pressBuzzer,
     } = useGameUpdates({
         sessionCode: sessionId || "",
         enableWebSocket: true,

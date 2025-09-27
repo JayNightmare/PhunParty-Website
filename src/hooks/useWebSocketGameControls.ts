@@ -3,10 +3,10 @@
  * This module provides functions to control games via WebSocket connections
  */
 
-import { WebSocketMessage } from "@/hooks/useWebSocket";
+import { PhunPartyWebSocketMessage } from "@/hooks/useWebSocket";
 
 export interface GameControlWebSocket {
-    sendMessage: (message: WebSocketMessage) => void;
+    sendMessage: (message: PhunPartyWebSocketMessage) => void;
     isConnected: boolean;
 }
 
@@ -19,7 +19,7 @@ export const createWebSocketGameControls = (ws: GameControlWebSocket) => {
 
         ws.sendMessage({
             type: "start_game",
-            payload: {},
+            data: {},
             timestamp: Date.now(),
         });
     };
@@ -31,7 +31,7 @@ export const createWebSocketGameControls = (ws: GameControlWebSocket) => {
 
         ws.sendMessage({
             type: "next_question",
-            payload: {},
+            data: {},
             timestamp: Date.now(),
         });
     };
@@ -43,7 +43,7 @@ export const createWebSocketGameControls = (ws: GameControlWebSocket) => {
 
         ws.sendMessage({
             type: "end_game",
-            payload: {},
+            data: {},
             timestamp: Date.now(),
         });
     };
@@ -55,7 +55,7 @@ export const createWebSocketGameControls = (ws: GameControlWebSocket) => {
 
         ws.sendMessage({
             type: "get_session_stats",
-            payload: {},
+            data: {},
             timestamp: Date.now(),
         });
     };
@@ -71,7 +71,7 @@ export const createWebSocketGameControls = (ws: GameControlWebSocket) => {
 
         ws.sendMessage({
             type: "submit_answer",
-            payload: {
+            data: {
                 player_id: playerId,
                 question_id: questionId,
                 answer: answer,
@@ -87,7 +87,7 @@ export const createWebSocketGameControls = (ws: GameControlWebSocket) => {
 
         ws.sendMessage({
             type: "buzzer_press",
-            payload: {
+            data: {
                 player_id: playerId,
             },
             timestamp: Date.now(),

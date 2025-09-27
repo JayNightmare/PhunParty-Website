@@ -1,35 +1,72 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import {
-    BackendWebSocketResponse,
-    BackendWebSocketMessage,
-    parseBackendMessage,
-    formatMessageForBackend,
-} from "@/lib/websocket";
 
+// Backend WebSocket message types based on your API
 export interface WebSocketMessage {
     type: string;
-    payload: any;
+    payload?: any;
+    timestamp?: number;
+}
+
+// Specific message types from your backend
+export type WebSocketMessageType =
+    | "initial_state"
+    | "ping"
+    | "pong"
+    | "player_joined"
+    | "player_left"
+    | "game_started"
+    | "game_ended"
+    | "question_started"
+    | "question_ended"
+    | "player_answered"
+    | "submit_answer"
+    | "buzzer_press"
+    | "buzzer_winner"
+    | "correct_answer"
+    | "incorrect_answer"
+    | "ui_update"
+    | "session_stats"
+    | "next_question"
+    | "start_game"
+    | "end_game"
+    | "get_session_stats"
+    | "error";
+
+export interface PhunPartyWebSocketMessage {
+    type: WebSocketMessageType;
+    data?: any;
     timestamp?: number;
 }
 
 export interface UseWebSocketOptions {
     reconnectAttempts?: number;
     reconnectInterval?: number;
+    clientType?: "web" | "mobile";
+    playerId?: string;
+    playerName?: string;
+    playerPhoto?: string;
     onConnect?: () => void;
     onDisconnect?: () => void;
     onError?: (error: Event) => void;
-    onMessage?: (message: WebSocketMessage) => void;
-    enableHeartbeat?: boolean;
-    heartbeatInterval?: number;
+    onMessage?: (message: PhunPartyWebSocketMessage) => void;
 }
 
 export interface UseWebSocketReturn {
     isConnected: boolean;
     isReconnecting: boolean;
-    sendMessage: (message: WebSocketMessage) => void;
+    sendMessage: (message: PhunPartyWebSocketMessage) => void;
     disconnect: () => void;
     connect: () => void;
-    lastMessage: WebSocketMessage | null;
+    lastMessage: PhunPartyWebSocketMessage | null;
+    sessionStats: any | null;
+    // Helper functions for common game actions
+    submitAnswer: (answer: string, questionId: string) => void;
+    pressBuzzer: () => void;
+    startGame: () => void;
+    nextQuestion: () => void;
+    endGame: () => void;
+    getSessionStats: () => void;
+    sendPing: () => void;
 }
 
 const useWebSocket = (
@@ -39,23 +76,24 @@ const useWebSocket = (
     const {
         reconnectAttempts = 5,
         reconnectInterval = 3000,
+        clientType = "web",
+        playerId,
+        playerName,
+        playerPhoto,
         onConnect,
         onDisconnect,
         onError,
         onMessage,
-        enableHeartbeat = true,
-        heartbeatInterval = 30000,
     } = options;
 
     const [isConnected, setIsConnected] = useState(false);
     const [isReconnecting, setIsReconnecting] = useState(false);
-    const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(
-        null
-    );
+    const [lastMessage, setLastMessage] =
+        useState<PhunPartyWebSocketMessage | null>(null);
+    const [sessionStats, setSessionStats] = useState<any | null>(null);
 
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const heartbeatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectCountRef = useRef(0);
     const shouldReconnectRef = useRef(true);
 
@@ -65,96 +103,69 @@ const useWebSocket = (
         }
 
         try {
-            console.log(`Attempting WebSocket connection to: ${url}`);
             setIsReconnecting(reconnectCountRef.current > 0);
-            wsRef.current = new WebSocket(url);
+
+            // Build WebSocket URL with query parameters for backend
+            const wsUrl = new URL(url);
+            wsUrl.searchParams.set("client_type", clientType);
+
+            if (clientType === "mobile" && playerId) {
+                wsUrl.searchParams.set("player_id", playerId);
+                if (playerName)
+                    wsUrl.searchParams.set("player_name", playerName);
+                if (playerPhoto)
+                    wsUrl.searchParams.set("player_photo", playerPhoto);
+            }
+
+            wsRef.current = new WebSocket(wsUrl.toString());
 
             wsRef.current.onopen = () => {
-                console.log("WebSocket connected to:", url);
                 setIsConnected(true);
                 setIsReconnecting(false);
                 reconnectCountRef.current = 0;
-
-                // Start heartbeat
-                if (enableHeartbeat) {
-                    startHeartbeat();
-                }
-
                 onConnect?.();
             };
 
-            wsRef.current.onclose = (event) => {
-                console.log(
-                    `WebSocket closed: ${event.code} ${
-                        event.reason || "<empty string>"
-                    }`
-                );
-                console.log("WebSocket close event details:", {
-                    code: event.code,
-                    reason: event.reason,
-                    wasClean: event.wasClean,
-                    url: url,
-                });
+            wsRef.current.onclose = () => {
                 setIsConnected(false);
                 setIsReconnecting(false);
-
-                // Stop heartbeat
-                stopHeartbeat();
-
                 onDisconnect?.();
 
                 // Auto-reconnect if enabled and within limits
                 if (
                     shouldReconnectRef.current &&
-                    reconnectCountRef.current < reconnectAttempts &&
-                    event.code !== 4004 // Don't reconnect if session not found
+                    reconnectCountRef.current < reconnectAttempts
                 ) {
                     reconnectCountRef.current++;
-                    console.log(
-                        `Attempting to reconnect (${reconnectCountRef.current}/${reconnectAttempts})...`
-                    );
                     reconnectTimeoutRef.current = setTimeout(() => {
                         connect();
                     }, reconnectInterval);
-                } else if (event.code === 4004) {
-                    console.warn(
-                        "Session not found - not attempting to reconnect"
-                    );
-                } else if (reconnectCountRef.current >= reconnectAttempts) {
-                    console.warn(
-                        "Max reconnection attempts reached - giving up"
-                    );
                 }
             };
 
             wsRef.current.onerror = (error) => {
-                console.error("WebSocket error:", error);
                 setIsConnected(false);
                 onError?.(error);
             };
 
             wsRef.current.onmessage = (event) => {
                 try {
-                    const backendMessage: BackendWebSocketResponse = JSON.parse(
+                    const message: PhunPartyWebSocketMessage = JSON.parse(
                         event.data
                     );
+                    setLastMessage(message);
 
-                    // Handle pong responses for heartbeat
-                    if (backendMessage.type === "pong") {
-                        // Heartbeat response received
-                        return;
+                    // Handle special message types
+                    if (message.type === "session_stats") {
+                        setSessionStats(message.data);
+                    } else if (message.type === "pong") {
+                        // Handle heartbeat response
+                        console.debug("WebSocket heartbeat received");
                     }
 
-                    // Convert backend message format to frontend format
-                    const message = parseBackendMessage(backendMessage);
-                    setLastMessage(message);
                     onMessage?.(message);
                 } catch (error) {
-                    console.error(
-                        "Failed to parse WebSocket message:",
-                        error,
-                        event.data
-                    );
+                    console.error("Failed to parse WebSocket message:", error);
                 }
             };
         } catch (error) {
@@ -162,6 +173,10 @@ const useWebSocket = (
         }
     }, [
         url,
+        clientType,
+        playerId,
+        playerName,
+        playerPhoto,
         reconnectAttempts,
         reconnectInterval,
         onConnect,
@@ -169,30 +184,6 @@ const useWebSocket = (
         onError,
         onMessage,
     ]);
-
-    const startHeartbeat = useCallback(() => {
-        if (heartbeatTimeoutRef.current) {
-            clearTimeout(heartbeatTimeoutRef.current);
-        }
-
-        heartbeatTimeoutRef.current = setTimeout(() => {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-                // Send ping message
-                const pingMessage = formatMessageForBackend("ping");
-                wsRef.current.send(JSON.stringify(pingMessage));
-
-                // Schedule next heartbeat
-                startHeartbeat();
-            }
-        }, heartbeatInterval);
-    }, [heartbeatInterval]);
-
-    const stopHeartbeat = useCallback(() => {
-        if (heartbeatTimeoutRef.current) {
-            clearTimeout(heartbeatTimeoutRef.current);
-            heartbeatTimeoutRef.current = null;
-        }
-    }, []);
 
     const disconnect = useCallback(() => {
         shouldReconnectRef.current = false;
@@ -202,8 +193,6 @@ const useWebSocket = (
             reconnectTimeoutRef.current = null;
         }
 
-        stopHeartbeat();
-
         if (wsRef.current) {
             wsRef.current.close();
             wsRef.current = null;
@@ -212,27 +201,58 @@ const useWebSocket = (
         setIsConnected(false);
         setIsReconnecting(false);
         reconnectCountRef.current = 0;
-    }, [stopHeartbeat]);
+    }, []);
 
-    const sendMessage = useCallback((message: WebSocketMessage) => {
+    const sendMessage = useCallback((message: PhunPartyWebSocketMessage) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             try {
-                // Convert frontend message format to backend format
-                const backendMessage = formatMessageForBackend(
-                    message.type,
-                    message.payload
+                wsRef.current.send(
+                    JSON.stringify({
+                        ...message,
+                        timestamp: message.timestamp || Date.now(),
+                    })
                 );
-                wsRef.current.send(JSON.stringify(backendMessage));
             } catch (error) {
                 console.error("Failed to send WebSocket message:", error);
             }
-        } else {
-            console.warn(
-                "WebSocket not connected, cannot send message:",
-                message
-            );
         }
     }, []);
+
+    // Heartbeat/ping functionality
+    const sendPing = useCallback(() => {
+        sendMessage({ type: "ping" });
+    }, [sendMessage]);
+
+    // Helper functions for common messages
+    const submitAnswer = useCallback(
+        (answer: string, questionId: string) => {
+            sendMessage({
+                type: "submit_answer",
+                data: { answer, question_id: questionId },
+            });
+        },
+        [sendMessage]
+    );
+
+    const pressBuzzer = useCallback(() => {
+        sendMessage({ type: "buzzer_press" });
+    }, [sendMessage]);
+
+    const startGame = useCallback(() => {
+        sendMessage({ type: "start_game" });
+    }, [sendMessage]);
+
+    const nextQuestion = useCallback(() => {
+        sendMessage({ type: "next_question" });
+    }, [sendMessage]);
+
+    const endGame = useCallback(() => {
+        sendMessage({ type: "end_game" });
+    }, [sendMessage]);
+
+    const getSessionStats = useCallback(() => {
+        sendMessage({ type: "get_session_stats" });
+    }, [sendMessage]);
 
     useEffect(() => {
         if (url) {
@@ -245,12 +265,16 @@ const useWebSocket = (
         };
     }, [url, connect, disconnect]);
 
-    // Cleanup on unmount
+    // Set up heartbeat
     useEffect(() => {
-        return () => {
-            stopHeartbeat();
-        };
-    }, [stopHeartbeat]);
+        if (isConnected) {
+            const heartbeat = setInterval(() => {
+                sendPing();
+            }, 30000); // Send ping every 30 seconds
+
+            return () => clearInterval(heartbeat);
+        }
+    }, [isConnected, sendPing]);
 
     return {
         isConnected,
@@ -259,6 +283,15 @@ const useWebSocket = (
         disconnect,
         connect,
         lastMessage,
+        sessionStats,
+        // Helper functions
+        submitAnswer,
+        pressBuzzer,
+        startGame,
+        nextQuestion,
+        endGame,
+        getSessionStats,
+        sendPing,
     };
 };
 

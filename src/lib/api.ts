@@ -5,6 +5,26 @@ export const API_BASE_URL = (
 ).replace(/\/$/, "");
 const API_KEY = import.meta.env.VITE_API_KEY;
 
+// WebSocket URL utility
+export function getWebSocketUrl(
+    sessionCode: string,
+    params?: Record<string, string>
+): string {
+    const baseUrl = import.meta.env.DEV
+        ? "ws://localhost:8000"
+        : "wss://api.phun.party";
+
+    const url = new URL(`/ws/session/${sessionCode}`, baseUrl);
+
+    if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+            url.searchParams.set(key, value);
+        });
+    }
+
+    return url.toString();
+}
+
 // Test function to check API connection
 export async function testApiConnection(): Promise<{
     status: string;
@@ -34,7 +54,7 @@ export async function testApiConnection(): Promise<{
                 const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                     method: "GET",
                     headers: {
-                        "X-API-Key": API_KEY || "",
+                        "x-api-key": API_KEY || "",
                         Accept: "application/json",
                     },
                 });
@@ -103,8 +123,8 @@ async function apiFetch<T>(
 ): Promise<T> {
     const headers = new Headers(init.headers ?? undefined);
 
-    if (API_KEY && !headers.has("X-API-Key")) {
-        headers.set("X-API-Key", API_KEY);
+    if (API_KEY && !headers.has("x-api-key")) {
+        headers.set("x-api-key", API_KEY);
     }
 
     if (init.body && !headers.has("Content-Type")) {
@@ -216,14 +236,6 @@ export interface QuestionsAddedResponseModel {
 export interface GameResponse {
     code: string;
     name: string;
-    status: string;
-}
-
-export interface SessionResponse {
-    session_code: string;
-    host_name: string;
-    game_code: string;
-    number_of_questions: number;
     status: string;
 }
 
@@ -345,11 +357,9 @@ const mapGame = (raw: BackendGame): GameResponse => ({
     status: raw.rules,
 });
 
-const mapSession = (raw: BackendGameSession): SessionResponse => ({
-    session_code: raw.session_code,
-    host_name: raw.host_name,
-    game_code: raw.game_code,
-    number_of_questions: raw.number_of_questions,
+const mapSession = (raw: BackendGameSession): GameResponse => ({
+    code: raw.session_code,
+    name: raw.host_name ?? raw.session_code,
     status: "waiting",
 });
 
@@ -551,7 +561,7 @@ async function getPlayerWithToken(
 ): Promise<PlayerResponse> {
     const headers = new Headers();
     if (API_KEY) {
-        headers.set("X-API-Key", API_KEY);
+        headers.set("x-api-key", API_KEY);
     }
     headers.set("Authorization", `Bearer ${token}`);
     headers.set("Accept", "application/json");
@@ -659,7 +669,7 @@ export async function createGame(
 
 export async function createSession(
     data: CreateSessionRequest
-): Promise<SessionResponse> {
+): Promise<GameResponse> {
     const payload = {
         game_code: data.game_code,
         host_name: data.host_name ?? "Host",
@@ -684,14 +694,6 @@ export async function getGameSession(game_code: string): Promise<GameResponse> {
 export async function getGames(): Promise<GameResponse[]> {
     const raw = await apiFetch<BackendGame[]>("/game/");
     return raw.map(mapGame);
-}
-
-// Note: getGames() might actually return active sessions, not game types
-// This function is kept for potential future use if a dedicated sessions endpoint exists
-export async function getSessions(): Promise<SessionResponse[]> {
-    // For now, this endpoint might not exist - using getGames() in ActiveSessions
-    const raw = await apiFetch<BackendGameSession[]>("/game/sessions/");
-    return raw.map(mapSession);
 }
 
 export async function joinGameSession(
