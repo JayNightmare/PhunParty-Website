@@ -219,6 +219,14 @@ export interface GameResponse {
     status: string;
 }
 
+export interface SessionResponse {
+    session_code: string;
+    host_name: string;
+    game_code: string;
+    number_of_questions: number;
+    status: string;
+}
+
 export interface GameStatusResponse {
     session_code: string;
     game_state: "waiting" | "active" | "completed";
@@ -337,9 +345,11 @@ const mapGame = (raw: BackendGame): GameResponse => ({
     status: raw.rules,
 });
 
-const mapSession = (raw: BackendGameSession): GameResponse => ({
-    code: raw.session_code,
-    name: raw.host_name ?? raw.session_code,
+const mapSession = (raw: BackendGameSession): SessionResponse => ({
+    session_code: raw.session_code,
+    host_name: raw.host_name,
+    game_code: raw.game_code,
+    number_of_questions: raw.number_of_questions,
     status: "waiting",
 });
 
@@ -649,7 +659,7 @@ export async function createGame(
 
 export async function createSession(
     data: CreateSessionRequest
-): Promise<GameResponse> {
+): Promise<SessionResponse> {
     const payload = {
         game_code: data.game_code,
         host_name: data.host_name ?? "Host",
@@ -674,6 +684,14 @@ export async function getGameSession(game_code: string): Promise<GameResponse> {
 export async function getGames(): Promise<GameResponse[]> {
     const raw = await apiFetch<BackendGame[]>("/game/");
     return raw.map(mapGame);
+}
+
+// Note: getGames() might actually return active sessions, not game types
+// This function is kept for potential future use if a dedicated sessions endpoint exists
+export async function getSessions(): Promise<SessionResponse[]> {
+    // For now, this endpoint might not exist - using getGames() in ActiveSessions
+    const raw = await apiFetch<BackendGameSession[]>("/game/sessions/");
+    return raw.map(mapSession);
 }
 
 export async function joinGameSession(

@@ -38,7 +38,7 @@ export default function ActiveSessions() {
                 nav(`/sessions?focus=${list[0].code}`, { replace: true });
             }
         } catch (err: any) {
-            setError(err.message || "Failed to load games");
+            setError(err.message || "Failed to load sessions");
         } finally {
             setLoading(false);
         }
@@ -147,7 +147,7 @@ export default function ActiveSessions() {
                                             </div>
                                         </div>
                                         <div className="text-xs text-stone-400">
-                                            Code: {g.code}
+                                            {g.code}
                                         </div>
                                     </div>
                                 </Link>

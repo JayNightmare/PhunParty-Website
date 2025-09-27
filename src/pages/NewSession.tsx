@@ -1,6 +1,6 @@
 import { useNavigate, Navigate } from "react-router-dom";
 import Card from "@/components/Card";
-import { createSession, getGames } from "@/lib/api";
+import { createSession, getGames, SessionResponse } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { Difficulty } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -95,9 +95,9 @@ export default function NewSession() {
                 game_code: selectedGameCode,
             });
             showSuccess(
-                `Game session created successfully! Code: ${session.code}`
+                `Game session created successfully! Code: ${session.session_code}`
             );
-            nav(`/sessions?focus=${session.code}`);
+            nav(`/sessions?focus=${session.session_code}`);
         } catch (err: any) {
             const errorMsg = err.message || "Failed to create session";
             setError(errorMsg);
