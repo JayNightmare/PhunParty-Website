@@ -34,7 +34,7 @@ export async function testApiConnection(): Promise<{
                 const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                     method: "GET",
                     headers: {
-                        "x-api-key": API_KEY || "",
+                        "X-API-Key": API_KEY || "",
                         Accept: "application/json",
                     },
                 });
@@ -103,8 +103,8 @@ async function apiFetch<T>(
 ): Promise<T> {
     const headers = new Headers(init.headers ?? undefined);
 
-    if (API_KEY && !headers.has("x-api-key")) {
-        headers.set("x-api-key", API_KEY);
+    if (API_KEY && !headers.has("X-API-Key")) {
+        headers.set("X-API-Key", API_KEY);
     }
 
     if (init.body && !headers.has("Content-Type")) {
@@ -551,7 +551,7 @@ async function getPlayerWithToken(
 ): Promise<PlayerResponse> {
     const headers = new Headers();
     if (API_KEY) {
-        headers.set("x-api-key", API_KEY);
+        headers.set("X-API-Key", API_KEY);
     }
     headers.set("Authorization", `Bearer ${token}`);
     headers.set("Accept", "application/json");

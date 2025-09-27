@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/useToast";
 import { useTouchGestures } from "@/hooks/useTouchGestures";
 import { useWebSocketGameControls } from "@/hooks/useWebSocketGameControls";
 import WebSocketStatus from "@/components/WebSocketStatus";
+import WebSocketDiagnostics from "@/components/WebSocketDiagnostics";
 
 export default function ActiveQuiz() {
     const { sessionId } = useParams();
@@ -472,6 +473,13 @@ export default function ActiveQuiz() {
                             </div>
                         </Card>
                     </section>
+
+                    {/* WebSocket Diagnostics - Development Only */}
+                    {import.meta.env.DEV && sessionId && (
+                        <section>
+                            <WebSocketDiagnostics sessionCode={sessionId} />
+                        </section>
+                    )}
                 </div>
             </main>
         </div>

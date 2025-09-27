@@ -44,13 +44,14 @@ const useGameUpdates = ({
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdate, setLastUpdate] = useState<GameUpdate | null>(null);
+    const [webSocketDisabled, setWebSocketDisabled] = useState(false);
 
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const lastFetchRef = useRef<number>(0);
 
-    // WebSocket URL using the utility function
+    // WebSocket URL using the utility function - disable if WebSocket is disabled
     const wsUrl =
-        enableWebSocket && sessionCode
+        enableWebSocket && sessionCode && !webSocketDisabled
             ? buildWebSocketUrl(sessionCode, "web")
             : null;
 
@@ -169,7 +170,14 @@ const useGameUpdates = ({
                 ":",
                 error
             );
-            setError("WebSocket connection error");
+            setError("WebSocket connection error - falling back to polling");
+
+            // If we consistently get errors, disable WebSocket
+            // This prevents endless retry loops
+            console.warn(
+                "WebSocket connection failed, disabling WebSocket for this session"
+            );
+            setWebSocketDisabled(true);
         },
         reconnectAttempts: 3,
         reconnectInterval: 5000,
@@ -179,7 +187,7 @@ const useGameUpdates = ({
 
     // Fallback polling when WebSocket is not available or connected
     useEffect(() => {
-        if (!enableWebSocket || !isConnected) {
+        if (!enableWebSocket || !isConnected || webSocketDisabled) {
             // Start polling
             const startPolling = () => {
                 if (pollIntervalRef.current) {
@@ -211,7 +219,13 @@ const useGameUpdates = ({
             // Initial fetch when WebSocket connects
             fetchGameStatus();
         }
-    }, [enableWebSocket, isConnected, pollInterval, fetchGameStatus]);
+    }, [
+        enableWebSocket,
+        isConnected,
+        webSocketDisabled,
+        pollInterval,
+        fetchGameStatus,
+    ]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -224,12 +238,13 @@ const useGameUpdates = ({
 
     return {
         gameStatus,
-        isConnected: enableWebSocket ? isConnected : true, // Always "connected" when using polling
+        isConnected: enableWebSocket && !webSocketDisabled ? isConnected : true, // Always "connected" when using polling
         isLoading,
         error,
         lastUpdate,
         refetch: fetchGameStatus,
-        sendMessage: enableWebSocket ? sendMessage : undefined,
+        sendMessage:
+            enableWebSocket && !webSocketDisabled ? sendMessage : undefined,
     };
 };
 

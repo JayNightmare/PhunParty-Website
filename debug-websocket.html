@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Debug Tool</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .form-group { margin: 15px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; margin-bottom: 10px; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .connect { background: #4CAF50; color: white; }
+        .disconnect { background: #f44336; color: white; }
+        .send { background: #2196F3; color: white; }
+        .log { 
+            background: #f5f5f5; 
+            border: 1px solid #ddd; 
+            padding: 10px; 
+            height: 300px; 
+            overflow-y: auto; 
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 4px;
+        }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        .status.connecting { background: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket Debug Tool</h1>
+        
+        <div class="form-group">
+            <label for="wsUrl">WebSocket URL:</label>
+            <input type="text" id="wsUrl" value="wss://api.phun.party/ws/session/8VIZHNC6R?client_type=web" />
+        </div>
+        
+        <div class="form-group">
+            <label for="sessionCode">Session Code:</label>
+            <input type="text" id="sessionCode" value="8VIZHNC6R" />
+        </div>
+        
+        <div class="form-group">
+            <label for="clientType">Client Type:</label>
+            <select id="clientType">
+                <option value="web">Web</option>
+                <option value="mobile">Mobile</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <button id="connectBtn" class="connect">Connect</button>
+            <button id="disconnectBtn" class="disconnect" disabled>Disconnect</button>
+            <button id="pingBtn" class="send" disabled>Send Ping</button>
+        </div>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <div class="form-group">
+            <label for="messageInput">Message to Send:</label>
+            <input type="text" id="messageInput" value='{"type": "ping"}' />
+            <button id="sendBtn" class="send" disabled>Send Message</button>
+        </div>
+        
+        <div class="form-group">
+            <label>Connection Log:</label>
+            <div id="log" class="log"></div>
+        </div>
+        
+        <div class="form-group">
+            <button onclick="clearLog()">Clear Log</button>
+            <button onclick="testMultipleUrls()">Test Multiple URLs</button>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let connectionAttempts = 0;
+        const maxAttempts = 3;
+        
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        const wsUrlInput = document.getElementById('wsUrl');
+        const sessionCodeInput = document.getElementById('sessionCode');
+        const clientTypeInput = document.getElementById('clientType');
+        const messageInput = document.getElementById('messageInput');
+        
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const pingBtn = document.getElementById('pingBtn');
+        const sendBtn = document.getElementById('sendBtn');
+        
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<span style="color: #666">[${timestamp}]</span> <span style="color: ${getLogColor(type)}">[${type.toUpperCase()}]</span> ${message}`;
+            log.appendChild(logEntry);
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function getLogColor(type) {
+            switch(type) {
+                case 'error': return '#d32f2f';
+                case 'warn': return '#f57c00';
+                case 'success': return '#388e3c';
+                case 'info': return '#1976d2';
+                default: return '#000';
+            }
+        }
+        
+        function updateStatus(state, message) {
+            status.className = `status ${state}`;
+            status.textContent = message;
+        }
+        
+        function updateUrl() {
+            const sessionCode = sessionCodeInput.value;
+            const clientType = clientTypeInput.value;
+            const baseUrl = `wss://api.phun.party/ws/session/${sessionCode}?client_type=${clientType}`;
+            wsUrlInput.value = baseUrl;
+        }
+        
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                addLog('Already connected', 'warn');
+                return;
+            }
+            
+            const url = wsUrlInput.value;
+            addLog(`Attempting to connect to: ${url}`, 'info');
+            updateStatus('connecting', 'Connecting...');
+            
+            try {
+                ws = new WebSocket(url);
+                connectionAttempts++;
+                
+                ws.onopen = function(event) {
+                    addLog('✅ WebSocket connected successfully!', 'success');
+                    updateStatus('connected', 'Connected');
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    pingBtn.disabled = false;
+                    sendBtn.disabled = false;
+                    connectionAttempts = 0;
+                };
+                
+                ws.onmessage = function(event) {
+                    addLog(`📨 Received: ${event.data}`, 'success');
+                    try {
+                        const parsed = JSON.parse(event.data);
+                        addLog(`📋 Parsed message: ${JSON.stringify(parsed, null, 2)}`, 'info');
+                    } catch (e) {
+                        addLog(`⚠️ Could not parse as JSON: ${e.message}`, 'warn');
+                    }
+                };
+                
+                ws.onclose = function(event) {
+                    addLog(`❌ WebSocket closed: Code ${event.code}, Reason: "${event.reason || '<empty>'}", Clean: ${event.wasClean}`, 'error');
+                    updateStatus('disconnected', 'Disconnected');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    pingBtn.disabled = true;
+                    sendBtn.disabled = true;
+                    
+                    // Decode close codes
+                    const closeCodeMeaning = getCloseCodeMeaning(event.code);
+                    addLog(`🔍 Close code meaning: ${closeCodeMeaning}`, 'info');
+                };
+                
+                ws.onerror = function(event) {
+                    addLog(`💥 WebSocket error occurred`, 'error');
+                    console.error('WebSocket error:', event);
+                    updateStatus('disconnected', 'Error occurred');
+                };
+                
+            } catch (error) {
+                addLog(`❌ Failed to create WebSocket: ${error.message}`, 'error');
+                updateStatus('disconnected', 'Connection failed');
+            }
+        }
+        
+        function disconnect() {
+            if (ws) {
+                addLog('Disconnecting WebSocket...', 'info');
+                ws.close(1000, 'Manual disconnect');
+                ws = null;
+            }
+        }
+        
+        function sendPing() {
+            sendMessage('{"type": "ping"}');
+        }
+        
+        function sendMessage(message = null) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addLog('❌ WebSocket not connected', 'error');
+                return;
+            }
+            
+            const msg = message || messageInput.value;
+            try {
+                ws.send(msg);
+                addLog(`📤 Sent: ${msg}`, 'info');
+            } catch (error) {
+                addLog(`❌ Failed to send message: ${error.message}`, 'error');
+            }
+        }
+        
+        function clearLog() {
+            log.innerHTML = '';
+        }
+        
+        function getCloseCodeMeaning(code) {
+            const meanings = {
+                1000: 'Normal Closure - Connection closed normally',
+                1001: 'Going Away - Server going down or browser navigating away',
+                1002: 'Protocol Error - WebSocket protocol error',
+                1003: 'Unsupported Data - Unsupported data type received',
+                1005: 'No Status Received - No close status code provided',
+                1006: 'Abnormal Closure - Connection closed abnormally (network error)',
+                1007: 'Invalid Frame Payload Data - Invalid UTF-8 data received',
+                1008: 'Policy Violation - Message violates policy',
+                1009: 'Message Too Big - Message too large to process',
+                1010: 'Mandatory Extension - Required extension not supported',
+                1011: 'Internal Server Error - Server encountered error',
+                1015: 'TLS Handshake - TLS handshake failed',
+                4004: 'Session Not Found - Custom: Session not found'
+            };
+            return meanings[code] || `Unknown code: ${code}`;
+        }
+        
+        function testMultipleUrls() {
+            const sessionCode = sessionCodeInput.value;
+            const urls = [
+                `ws://api.phun.party/ws/session/${sessionCode}?client_type=web`,
+                `wss://api.phun.party/ws/session/${sessionCode}?client_type=web`,
+                `ws://localhost:8000/ws/session/${sessionCode}?client_type=web`,
+                `wss://localhost:8000/ws/session/${sessionCode}?client_type=web`,
+            ];
+            
+            addLog('🧪 Testing multiple WebSocket URLs...', 'info');
+            
+            urls.forEach((url, index) => {
+                setTimeout(() => {
+                    addLog(`Testing URL ${index + 1}/${urls.length}: ${url}`, 'info');
+                    const testWs = new WebSocket(url);
+                    
+                    const timeout = setTimeout(() => {
+                        testWs.close();
+                        addLog(`⏱️ ${url} - Connection timeout`, 'warn');
+                    }, 5000);
+                    
+                    testWs.onopen = () => {
+                        clearTimeout(timeout);
+                        addLog(`✅ ${url} - Connection successful!`, 'success');
+                        testWs.close();
+                    };
+                    
+                    testWs.onerror = () => {
+                        clearTimeout(timeout);
+                        addLog(`❌ ${url} - Connection failed`, 'error');
+                    };
+                    
+                    testWs.onclose = (event) => {
+                        clearTimeout(timeout);
+                        if (event.code !== 1000) {
+                            addLog(`❌ ${url} - Closed with code ${event.code}: ${getCloseCodeMeaning(event.code)}`, 'error');
+                        }
+                    };
+                }, index * 1000);
+            });
+        }
+        
+        // Event listeners
+        connectBtn.onclick = connect;
+        disconnectBtn.onclick = disconnect;
+        pingBtn.onclick = sendPing;
+        sendBtn.onclick = () => sendMessage();
+        
+        sessionCodeInput.oninput = updateUrl;
+        clientTypeInput.onchange = updateUrl;
+        
+        messageInput.onkeypress = function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        };
+        
+        // Initialize
+        addLog('WebSocket Debug Tool initialized', 'info');
+        addLog('Enter a session code and click Connect to test the WebSocket connection', 'info');
+    </script>
+</body>
+</html>

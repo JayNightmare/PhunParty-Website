@@ -65,6 +65,7 @@ const useWebSocket = (
         }
 
         try {
+            console.log(`Attempting WebSocket connection to: ${url}`);
             setIsReconnecting(reconnectCountRef.current > 0);
             wsRef.current = new WebSocket(url);
 
@@ -83,7 +84,17 @@ const useWebSocket = (
             };
 
             wsRef.current.onclose = (event) => {
-                console.log("WebSocket closed:", event.code, event.reason);
+                console.log(
+                    `WebSocket closed: ${event.code} ${
+                        event.reason || "<empty string>"
+                    }`
+                );
+                console.log("WebSocket close event details:", {
+                    code: event.code,
+                    reason: event.reason,
+                    wasClean: event.wasClean,
+                    url: url,
+                });
                 setIsConnected(false);
                 setIsReconnecting(false);
 
@@ -105,6 +116,14 @@ const useWebSocket = (
                     reconnectTimeoutRef.current = setTimeout(() => {
                         connect();
                     }, reconnectInterval);
+                } else if (event.code === 4004) {
+                    console.warn(
+                        "Session not found - not attempting to reconnect"
+                    );
+                } else if (reconnectCountRef.current >= reconnectAttempts) {
+                    console.warn(
+                        "Max reconnection attempts reached - giving up"
+                    );
                 }
             };
 

@@ -29,6 +29,12 @@ export const buildWebSocketQueryParams = (
     const params = new URLSearchParams();
     params.set("client_type", clientType);
 
+    // Add API key if available (since WebSocket can't use headers)
+    const apiKey = import.meta.env.VITE_API_KEY;
+    if (apiKey) {
+        params.set("api_key", apiKey);
+    }
+
     if (playerId) params.set("player_id", playerId);
     if (playerName) params.set("player_name", playerName);
     if (playerPhoto) params.set("player_photo", playerPhoto);
