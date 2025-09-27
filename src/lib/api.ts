@@ -431,7 +431,7 @@ export interface CreateSessionRequest {
     game_code: string;
     host_name?: string;
     number_of_questions?: number;
-    isPublic: boolean;
+    ispublic: boolean;
 }
 
 export interface SubmitAnswerRequest {

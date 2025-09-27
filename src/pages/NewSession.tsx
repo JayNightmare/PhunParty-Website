@@ -102,7 +102,7 @@ export default function NewSession() {
                 host_name: hostName.trim(),
                 number_of_questions: num,
                 game_code: gameOfType.code, // Use actual game code
-                isPublic: true,
+                ispublic: true,
             });
             showSuccess(
                 `Game session created successfully! Code: ${session.code}`
