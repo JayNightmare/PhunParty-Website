@@ -681,7 +681,12 @@ export async function createSession(
         body: JSON.stringify(payload),
     });
 
-    return mapSession(raw);
+    const session = mapSession(raw);
+
+    // Add the created session to user's session list
+    addUserSession(session.code);
+
+    return session;
 }
 
 export async function getGameSession(game_code: string): Promise<GameResponse> {
@@ -694,6 +699,75 @@ export async function getGameSession(game_code: string): Promise<GameResponse> {
 export async function getGames(): Promise<GameResponse[]> {
     const raw = await apiFetch<BackendGame[]>("/game/");
     return raw.map(mapGame);
+}
+
+// Get unique game types (genres) from all available games
+export async function getGameTypes(): Promise<string[]> {
+    const games = await getGames();
+    const gameTypes = [
+        ...new Set(games.map((game) => game.name).filter(Boolean)),
+    ];
+    return gameTypes.length > 0 ? gameTypes : ["trivia", "speed-round"]; // fallback
+}
+
+// Get user's created sessions from localStorage
+export async function getUserSessions(): Promise<GameResponse[]> {
+    const stored = localStorage.getItem("user_sessions");
+    if (!stored) return [];
+
+    try {
+        const sessionCodes: string[] = JSON.parse(stored);
+        const sessions: GameResponse[] = [];
+
+        // Get status for each session to see if it's still valid
+        for (const sessionCode of sessionCodes) {
+            try {
+                const status = await getSessionStatus(sessionCode);
+                if (status) {
+                    // Create a GameResponse from the session status
+                    sessions.push({
+                        code: sessionCode,
+                        name: `Session ${sessionCode}`,
+                        status: status.game_state || "waiting",
+                    });
+                }
+            } catch (err) {
+                // Session might be expired/deleted, continue with others
+                console.warn(`Session ${sessionCode} no longer exists`);
+            }
+        }
+
+        // Update localStorage to remove invalid sessions
+        const validSessionCodes = sessions.map((s) => s.code);
+        localStorage.setItem(
+            "user_sessions",
+            JSON.stringify(validSessionCodes)
+        );
+
+        return sessions;
+    } catch (err) {
+        console.error("Error loading user sessions:", err);
+        return [];
+    }
+}
+
+// Add a session to user's session list (call after creating a session)
+export function addUserSession(sessionCode: string): void {
+    const stored = localStorage.getItem("user_sessions");
+    let sessions: string[] = [];
+
+    if (stored) {
+        try {
+            sessions = JSON.parse(stored);
+        } catch (err) {
+            console.error("Error parsing stored sessions:", err);
+        }
+    }
+
+    if (!sessions.includes(sessionCode)) {
+        sessions.push(sessionCode);
+        localStorage.setItem("user_sessions", JSON.stringify(sessions));
+    }
 }
 
 export async function joinGameSession(

@@ -8,7 +8,7 @@ import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
 import useGameUpdates from "@/hooks/useGameUpdates";
 import {
-    getGames,
+    getUserSessions,
     getSessionStatus,
     startGame,
     GameStatusResponse,
@@ -21,19 +21,19 @@ export default function ActiveSessions() {
     const loc = useLocation();
     const nav = useNavigate();
     const params = new URLSearchParams(loc.search);
-    const [games, setGames] = useState<GameResponse[]>([]);
+    const [sessions, setSessions] = useState<GameResponse[]>([]);
     const [status, setStatus] = useState<GameStatusResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [startingGame, setStartingGame] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const focus = params.get("focus") || games[0]?.code;
+    const focus = params.get("focus") || sessions[0]?.code;
     const { toasts, removeToast, success, error: toastError } = useToast();
 
-    const loadGames = useCallback(async () => {
+    const loadSessions = useCallback(async () => {
         try {
             setLoading(true);
-            const list = await getGames();
-            setGames(list);
+            const list = await getUserSessions();
+            setSessions(list);
             if (!params.get("focus") && list[0]) {
                 nav(`/sessions?focus=${list[0].code}`, { replace: true });
             }
@@ -80,11 +80,11 @@ export default function ActiveSessions() {
         } finally {
             setStartingGame(false);
         }
-    }, [focus, success, toastError, loadStatus, nav]);
+    }, [focus, success, toastError, nav]);
 
     useEffect(() => {
-        loadGames();
-    }, [loadGames]);
+        loadSessions();
+    }, [loadSessions]);
 
     // Merge real-time status with local status if available
     const currentStatus = realTimeStatus || status;
@@ -118,7 +118,7 @@ export default function ActiveSessions() {
                             {loading && (
                                 <div className="text-stone-400">Loading…</div>
                             )}
-                            {!loading && games.length === 0 && (
+                            {!loading && sessions.length === 0 && (
                                 <div className="text-stone-400">
                                     No sessions yet.{" "}
                                     <Link className="underline" to="/new">
@@ -127,12 +127,12 @@ export default function ActiveSessions() {
                                     .
                                 </div>
                             )}
-                            {games.map((g) => (
+                            {sessions.map((session) => (
                                 <Link
-                                    key={g.code}
-                                    to={`/sessions?focus=${g.code}`}
+                                    key={session.code}
+                                    to={`/sessions?focus=${session.code}`}
                                     className={`block px-3 py-2 rounded-xl ${
-                                        g.code === focus
+                                        session.code === focus
                                             ? "bg-ink-700"
                                             : "hover:bg-ink-700"
                                     }`}
@@ -140,14 +140,14 @@ export default function ActiveSessions() {
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <div className="font-medium">
-                                                {g.name}
+                                                {session.name}
                                             </div>
                                             <div className="text-xs text-stone-400">
-                                                Status: {g.status}
+                                                Status: {session.status}
                                             </div>
                                         </div>
                                         <div className="text-xs text-stone-400">
-                                            {g.code}
+                                            {session.code}
                                         </div>
                                     </div>
                                 </Link>
@@ -183,8 +183,9 @@ export default function ActiveSessions() {
                                 </div>
                                 <div>
                                     <div className="font-semibold text-lg">
-                                        {games.find((g) => g.code === focus)
-                                            ?.name || focus}
+                                        {sessions.find(
+                                            (session) => session.code === focus
+                                        )?.name || focus}
                                     </div>
                                     <div className="flex items-center gap-2 mb-3">
                                         <div className="text-sm text-stone-300">
