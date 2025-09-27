@@ -98,9 +98,11 @@ export default function NewSession() {
             }
 
             const session = await createSession({
+                owner_player_id: user?.id || undefined,
                 host_name: hostName.trim(),
                 number_of_questions: num,
                 game_code: gameOfType.code, // Use actual game code
+                isPublic: true,
             });
             showSuccess(
                 `Game session created successfully! Code: ${session.code}`

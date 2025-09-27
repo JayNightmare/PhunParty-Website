@@ -427,9 +427,11 @@ export interface CreateGameRequest {
 }
 
 export interface CreateSessionRequest {
+    owner_player_id?: string;
     game_code: string;
     host_name?: string;
     number_of_questions?: number;
+    isPublic: boolean;
 }
 
 export interface SubmitAnswerRequest {
@@ -671,6 +673,7 @@ export async function createSession(
     data: CreateSessionRequest
 ): Promise<GameResponse> {
     const payload = {
+        owner_player_id: data.owner_player_id,
         game_code: data.game_code,
         host_name: data.host_name ?? "Host",
         number_of_questions: data.number_of_questions ?? 5,
