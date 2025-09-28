@@ -108,7 +108,7 @@ export default function Join() {
     // Check if player is already joined from localStorage
     useEffect(() => {
         if (sessionId) {
-            const stored = localStorage.getItem(`player_${sessionId}`);
+            const stored = localStorage.getItem(`auth_user`);
             if (stored) {
                 try {
                     const playerData = JSON.parse(stored);
@@ -116,7 +116,7 @@ export default function Join() {
                     setName(playerData.name);
                 } catch (error) {
                     // Clear invalid stored data
-                    localStorage.removeItem(`player_${sessionId}`);
+                    localStorage.removeItem(`auth_user`);
                 }
             }
         }
