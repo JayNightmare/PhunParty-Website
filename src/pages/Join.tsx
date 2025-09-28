@@ -7,6 +7,7 @@ import {
     submitAnswer,
     getSessionStatus,
     getCurrentQuestion,
+    getQuestion,
 } from "@/lib/api";
 import { LoadingButton, LoadingState } from "@/components/Loading";
 import { useToast } from "@/contexts/ToastContext";
@@ -86,24 +87,77 @@ export default function Join() {
         }
     }, [myId]);
 
-    // Process game status to extract question
+    // Process game status to extract question and fetch complete question data
     useEffect(() => {
-        if (gameStatus?.current_question) {
-            const currentQ = gameStatus.current_question;
-            setQuestion({
-                id: currentQ.id || `q_${gameStatus.current_question_index}`,
-                type: "mcq", // Default to MCQ for now
-                prompt: currentQ.prompt || "",
-                options: (currentQ.options || []).map((option, index) => ({
-                    id: `option_${index}`,
-                    text: String(option),
-                })),
-                answer: currentQ.answer || "",
-            });
-        } else {
-            setQuestion(null);
-        }
-    }, [gameStatus]);
+        const fetchCompleteQuestion = async () => {
+            if (gameStatus?.current_question?.id) {
+                try {
+                    // Fetch complete question data including answer and options
+                    const completeQuestion = await getQuestion(
+                        gameStatus.current_question.id
+                    );
+
+                    // For now, since the backend uses text-based answers, create simple text options
+                    // In the future, this could be enhanced with proper multiple choice options
+                    const answer = completeQuestion.answer || "";
+                    const fakeOptions = answer
+                        ? [
+                              answer,
+                              `Not ${answer}`,
+                              `Maybe ${answer}`,
+                              `Definitely not ${answer}`,
+                          ]
+                        : [];
+
+                    // Shuffle the options so correct answer isn't always first
+                    const shuffledOptions = [...fakeOptions].sort(
+                        () => Math.random() - 0.5
+                    );
+
+                    setQuestion({
+                        id: completeQuestion.id,
+                        type: "mcq", // Keep MCQ for now but with generated options
+                        prompt:
+                            completeQuestion.prompt ||
+                            gameStatus.current_question.prompt ||
+                            "",
+                        options: shuffledOptions.map((option, index) => ({
+                            id: `option_${index}`,
+                            text: String(option),
+                        })),
+                        answer: answer,
+                    });
+                } catch (error) {
+                    console.error("Failed to fetch complete question:", error);
+                    // Fallback to basic question data from game status
+                    const currentQ = gameStatus.current_question;
+                    setQuestion({
+                        id:
+                            currentQ.id ||
+                            `q_${gameStatus.current_question_index}`,
+                        type: "free", // Use text input as fallback
+                        prompt: currentQ.prompt || "",
+                        options: [],
+                        answer: currentQ.answer || "",
+                    });
+                }
+            } else if (gameStatus?.current_question) {
+                // Handle case where we have question data but no ID
+                const currentQ = gameStatus.current_question;
+                setQuestion({
+                    id: currentQ.id || `q_${gameStatus.current_question_index}`,
+                    type: "free", // Use text input when no complete data available
+                    prompt: currentQ.prompt || "",
+                    options: [],
+                    answer: currentQ.answer || "",
+                });
+            } else {
+                setQuestion(null);
+            }
+        };
+
+        fetchCompleteQuestion();
+    }, [gameStatus?.current_question]);
 
     // Check if player is already joined from localStorage
     useEffect(() => {
@@ -349,11 +403,26 @@ export default function Join() {
                                     {question.type === "mcq" && (
                                         <MobileAnswerSelector
                                             options={question.options || []}
-                                            onSelect={(optionText) =>
-                                                submit(optionText)
-                                            }
+                                            onSelect={(optionId) => {
+                                                // Find the option text by ID
+                                                const selectedOption =
+                                                    question.options?.find(
+                                                        (opt) =>
+                                                            opt.id === optionId
+                                                    );
+                                                if (selectedOption) {
+                                                    submit(selectedOption.text);
+                                                }
+                                            }}
                                             isSubmitting={submitLoading}
-                                            selectedOption={undefined}
+                                            selectedOption={
+                                                val
+                                                    ? question.options?.find(
+                                                          (opt) =>
+                                                              opt.text === val
+                                                      )?.id
+                                                    : undefined
+                                            }
                                             timeRemaining={undefined} // Could add timer from game status
                                             disabled={submitLoading}
                                         />

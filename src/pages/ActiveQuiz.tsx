@@ -5,6 +5,7 @@ import Card from "@/components/Card";
 import {
     getSessionStatus,
     GameStatusResponse,
+    getQuestion,
     pauseGame,
     resumeGame,
     nextQuestion,
@@ -142,22 +143,74 @@ export default function ActiveQuiz() {
             setGameState(gameStatus.current_question ? "active" : "waiting");
         }
 
-        // Extract current question from the status
-        if (gameStatus.current_question) {
-            const currentQ = gameStatus.current_question;
-            setQuestion({
-                id: currentQ.id || `q_${gameStatus.current_question_index}`,
-                type: "mcq", // Default to MCQ for now
-                prompt: currentQ.prompt || "",
-                options: (currentQ.options || []).map((option, index) => ({
-                    id: `option_${index}`,
-                    text: String(option),
-                })),
-                answer: currentQ.answer || "",
-            });
-        } else {
-            setQuestion(null);
-        }
+        // Extract current question from the status and fetch complete data
+        const fetchCompleteQuestion = async () => {
+            if (gameStatus.current_question?.id) {
+                try {
+                    // Fetch complete question data including answer and options
+                    const completeQuestion = await getQuestion(
+                        gameStatus.current_question.id
+                    );
+
+                    // Create mock MCQ options from the text answer
+                    const answer = completeQuestion.answer || "";
+                    const fakeOptions = answer
+                        ? [
+                              answer,
+                              `Not ${answer}`,
+                              `Maybe ${answer}`,
+                              `Definitely not ${answer}`,
+                          ]
+                        : [];
+
+                    // Shuffle the options so correct answer isn't always first
+                    const shuffledOptions = [...fakeOptions].sort(
+                        () => Math.random() - 0.5
+                    );
+
+                    setQuestion({
+                        id: completeQuestion.id,
+                        type: "mcq",
+                        prompt:
+                            completeQuestion.prompt ||
+                            gameStatus.current_question.prompt ||
+                            "",
+                        options: shuffledOptions.map((option, index) => ({
+                            id: `option_${index}`,
+                            text: String(option),
+                        })),
+                        answer: answer,
+                    });
+                } catch (error) {
+                    console.error("Failed to fetch complete question:", error);
+                    // Fallback to basic question data from game status
+                    const currentQ = gameStatus.current_question;
+                    setQuestion({
+                        id:
+                            currentQ.id ||
+                            `q_${gameStatus.current_question_index}`,
+                        type: "free", // Use free text as fallback
+                        prompt: currentQ.prompt || "",
+                        options: [],
+                        answer: currentQ.answer || "",
+                    });
+                }
+            } else if (gameStatus.current_question) {
+                // Handle case where we have question data but no ID
+                const currentQ = gameStatus.current_question;
+                setQuestion({
+                    id: currentQ.id || `q_${gameStatus.current_question_index}`,
+                    type: "free", // Use free text when no complete data available
+                    prompt: currentQ.prompt || "",
+                    options: [],
+                    answer: currentQ.answer || "",
+                });
+            } else {
+                setQuestion(null);
+            }
+        };
+
+        fetchCompleteQuestion();
 
         // Extract players from the status
         if (gameStatus.players) {
