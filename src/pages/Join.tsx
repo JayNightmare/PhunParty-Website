@@ -144,7 +144,7 @@ export default function Join() {
     // Check if player is already joined from localStorage
     useEffect(() => {
         if (sessionId) {
-            const stored = localStorage.getItem(`player_${sessionId}`);
+            const stored = localStorage.getItem(`auth_user`);
             if (stored) {
                 try {
                     const playerData = JSON.parse(stored);
@@ -169,38 +169,21 @@ export default function Join() {
         setJoinError(null);
 
         try {
-            // Step 1: Create a temporary player record
-            // Generate unique identifiers for this temporary player
-            const timestamp = Date.now();
-            const randomId = Math.random().toString(36).substr(2, 9);
-            const tempEmail = `temp_${timestamp}_${randomId}@phunparty.temp`;
-            const tempPassword = `temp_${timestamp}${randomId}`;
+            const p = localStorage.getItem(`auth_user`);
 
-            const newPlayer = await createPlayer({
-                player_name: name.trim(),
-                player_email: tempEmail,
-                hashed_password: tempPassword, // Backend will hash this
-                player_mobile: "", // Optional field
-                game_code: sessionId, // Associate with this session
-            });
+            if (!p) {
+                throw new Error("Player information not found in localStorage");
+            }
 
-            // Step 2: Join the game session using the created player ID
-            const res = await joinGameSession({
+            const player = JSON.parse(p);
+
+            const playerData = {
+                player_id: player.id,
                 session_code: sessionId,
-                player_id: newPlayer.player_id,
-            });
+            };
 
-            setMyId(newPlayer.player_id);
-
-            // Store player info in localStorage for the session
-            localStorage.setItem(
-                `player_${sessionId}`,
-                JSON.stringify({
-                    id: newPlayer.player_id,
-                    name: name.trim(),
-                    session_code: sessionId,
-                })
-            );
+            // Step 2: Join the game session with the created player ID
+            await joinGameSession(playerData);
 
             showSuccess(`Welcome to the game, ${name.trim()}!`);
         } catch (err: any) {

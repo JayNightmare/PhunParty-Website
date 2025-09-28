@@ -1005,9 +1005,11 @@ export async function previousQuestion(
     });
 }
 
+// ! END GAME ROUTE DOESN'T EXIST YET IN BACKEND ! \\
 export async function endGame(data: EndGameRequest): Promise<EndGameResponse> {
     return apiFetch<EndGameResponse>("/game-logic/end", {
         method: "POST",
         body: JSON.stringify(data),
     });
 }
+// ! ------------------------------------------- ! \\
