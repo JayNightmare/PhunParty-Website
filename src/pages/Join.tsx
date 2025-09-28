@@ -7,7 +7,7 @@ import {
     submitAnswer,
     getSessionStatus,
     getCurrentQuestion,
-    getQuestion,
+    createPlayer,
 } from "@/lib/api";
 import { LoadingButton, LoadingState } from "@/components/Loading";
 import { useToast } from "@/contexts/ToastContext";
@@ -87,82 +87,64 @@ export default function Join() {
         }
     }, [myId]);
 
-    // Process game status to extract question and fetch complete question data
+    // Fetch current question for the session using getCurrentQuestion
     useEffect(() => {
-        const fetchCompleteQuestion = async () => {
-            if (gameStatus?.current_question?.id) {
-                try {
-                    // Fetch complete question data including answer and options
-                    const completeQuestion = await getQuestion(
-                        gameStatus.current_question.id
-                    );
+        const fetchCurrentQuestion = async () => {
+            if (!sessionId) {
+                setQuestion(null);
+                return;
+            }
 
-                    // For now, since the backend uses text-based answers, create simple text options
-                    // In the future, this could be enhanced with proper multiple choice options
-                    const answer = completeQuestion.answer || "";
-                    const fakeOptions = answer
-                        ? [
-                              answer,
-                              `Not ${answer}`,
-                              `Maybe ${answer}`,
-                              `Definitely not ${answer}`,
-                          ]
-                        : [];
+            try {
+                // Get current question for the session directly
+                const currentQuestion = await getCurrentQuestion(sessionId);
 
-                    // Shuffle the options so correct answer isn't always first
-                    const shuffledOptions = [...fakeOptions].sort(
-                        () => Math.random() - 0.5
-                    );
-
-                    setQuestion({
-                        id: completeQuestion.id,
-                        type: "mcq", // Keep MCQ for now but with generated options
-                        prompt:
-                            completeQuestion.prompt ||
-                            gameStatus.current_question.prompt ||
-                            "",
-                        options: shuffledOptions.map((option, index) => ({
+                if (currentQuestion) {
+                    // Convert string options to MCQOption format
+                    const mcqOptions =
+                        currentQuestion.options?.map((option, index) => ({
                             id: `option_${index}`,
-                            text: String(option),
-                        })),
-                        answer: answer,
-                    });
-                } catch (error) {
-                    console.error("Failed to fetch complete question:", error);
-                    // Fallback to basic question data from game status
-                    const currentQ = gameStatus.current_question;
+                            text: option,
+                        })) || [];
+
                     setQuestion({
-                        id:
-                            currentQ.id ||
-                            `q_${gameStatus.current_question_index}`,
-                        type: "free", // Use text input as fallback
-                        prompt: currentQ.prompt || "",
-                        options: [],
-                        answer: currentQ.answer || "",
+                        id: currentQuestion.id,
+                        type: mcqOptions.length > 0 ? "mcq" : "free",
+                        prompt: currentQuestion.prompt || "",
+                        options: mcqOptions,
+                        answer: currentQuestion.answer || "",
+                        genre: currentQuestion.genre || undefined,
+                        difficulty:
+                            (currentQuestion.difficulty as Question["difficulty"]) ||
+                            undefined,
                     });
+                } else {
+                    setQuestion(null);
                 }
-            } else if (gameStatus?.current_question) {
-                // Handle case where we have question data but no ID
-                const currentQ = gameStatus.current_question;
-                setQuestion({
-                    id: currentQ.id || `q_${gameStatus.current_question_index}`,
-                    type: "free", // Use text input when no complete data available
-                    prompt: currentQ.prompt || "",
-                    options: [],
-                    answer: currentQ.answer || "",
-                });
-            } else {
+            } catch (error) {
+                console.error("Failed to fetch current question:", error);
                 setQuestion(null);
             }
         };
 
-        fetchCompleteQuestion();
-    }, [gameStatus?.current_question]);
+        // Fetch current question when:
+        // 1. Game status changes (new question might be available)
+        // 2. Player joins (need to get current question)
+        // 3. Component mounts with a session ID
+        if (gameStatus || myId) {
+            fetchCurrentQuestion();
+        }
+    }, [
+        sessionId,
+        gameStatus?.current_question_index,
+        gameStatus?.game_state,
+        myId,
+    ]);
 
     // Check if player is already joined from localStorage
     useEffect(() => {
         if (sessionId) {
-            const stored = localStorage.getItem(`auth_user`);
+            const stored = localStorage.getItem(`player_${sessionId}`);
             if (stored) {
                 try {
                     const playerData = JSON.parse(stored);
@@ -170,7 +152,7 @@ export default function Join() {
                     setName(playerData.name);
                 } catch (error) {
                     // Clear invalid stored data
-                    localStorage.removeItem(`auth_user`);
+                    localStorage.removeItem(`player_${sessionId}`);
                 }
             }
         }
@@ -187,24 +169,34 @@ export default function Join() {
         setJoinError(null);
 
         try {
-            // Generate a unique player ID
-            const playerId = `player_${Date.now()}_${Math.random()
-                .toString(36)
-                .substr(2, 9)}`;
+            // Step 1: Create a temporary player record
+            // Generate unique identifiers for this temporary player
+            const timestamp = Date.now();
+            const randomId = Math.random().toString(36).substr(2, 9);
+            const tempEmail = `temp_${timestamp}_${randomId}@phunparty.temp`;
+            const tempPassword = `temp_${timestamp}${randomId}`;
 
-            // Join the game session using the player ID
-            const res = await joinGameSession({
-                session_code: sessionId,
-                player_id: playerId,
+            const newPlayer = await createPlayer({
+                player_name: name.trim(),
+                player_email: tempEmail,
+                hashed_password: tempPassword, // Backend will hash this
+                player_mobile: "", // Optional field
+                game_code: sessionId, // Associate with this session
             });
 
-            setMyId(playerId);
+            // Step 2: Join the game session using the created player ID
+            const res = await joinGameSession({
+                session_code: sessionId,
+                player_id: newPlayer.player_id,
+            });
+
+            setMyId(newPlayer.player_id);
 
             // Store player info in localStorage for the session
             localStorage.setItem(
                 `player_${sessionId}`,
                 JSON.stringify({
-                    id: playerId,
+                    id: newPlayer.player_id,
                     name: name.trim(),
                     session_code: sessionId,
                 })

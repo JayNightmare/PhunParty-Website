@@ -5,7 +5,7 @@ import Card from "@/components/Card";
 import {
     getSessionStatus,
     GameStatusResponse,
-    getQuestion,
+    getCurrentQuestion,
     pauseGame,
     resumeGame,
     nextQuestion,
@@ -143,74 +143,46 @@ export default function ActiveQuiz() {
             setGameState(gameStatus.current_question ? "active" : "waiting");
         }
 
-        // Extract current question from the status and fetch complete data
-        const fetchCompleteQuestion = async () => {
-            if (gameStatus.current_question?.id) {
-                try {
-                    // Fetch complete question data including answer and options
-                    const completeQuestion = await getQuestion(
-                        gameStatus.current_question.id
-                    );
+        // Fetch current question for the session using getCurrentQuestion
+        const fetchCurrentQuestion = async () => {
+            if (!sessionId) {
+                setQuestion(null);
+                return;
+            }
 
-                    // Create mock MCQ options from the text answer
-                    const answer = completeQuestion.answer || "";
-                    const fakeOptions = answer
-                        ? [
-                              answer,
-                              `Not ${answer}`,
-                              `Maybe ${answer}`,
-                              `Definitely not ${answer}`,
-                          ]
-                        : [];
+            try {
+                // Get current question for the session directly
+                const currentQuestion = await getCurrentQuestion(sessionId);
 
-                    // Shuffle the options so correct answer isn't always first
-                    const shuffledOptions = [...fakeOptions].sort(
-                        () => Math.random() - 0.5
-                    );
-
-                    setQuestion({
-                        id: completeQuestion.id,
-                        type: "mcq",
-                        prompt:
-                            completeQuestion.prompt ||
-                            gameStatus.current_question.prompt ||
-                            "",
-                        options: shuffledOptions.map((option, index) => ({
+                if (currentQuestion) {
+                    // Convert string options to MCQOption format
+                    const mcqOptions =
+                        currentQuestion.options?.map((option, index) => ({
                             id: `option_${index}`,
-                            text: String(option),
-                        })),
-                        answer: answer,
-                    });
-                } catch (error) {
-                    console.error("Failed to fetch complete question:", error);
-                    // Fallback to basic question data from game status
-                    const currentQ = gameStatus.current_question;
+                            text: option,
+                        })) || [];
+
                     setQuestion({
-                        id:
-                            currentQ.id ||
-                            `q_${gameStatus.current_question_index}`,
-                        type: "free", // Use free text as fallback
-                        prompt: currentQ.prompt || "",
-                        options: [],
-                        answer: currentQ.answer || "",
+                        id: currentQuestion.id,
+                        type: mcqOptions.length > 0 ? "mcq" : "free",
+                        prompt: currentQuestion.prompt || "",
+                        options: mcqOptions,
+                        answer: currentQuestion.answer || "",
+                        genre: currentQuestion.genre || undefined,
+                        difficulty:
+                            (currentQuestion.difficulty as Question["difficulty"]) ||
+                            undefined,
                     });
+                } else {
+                    setQuestion(null);
                 }
-            } else if (gameStatus.current_question) {
-                // Handle case where we have question data but no ID
-                const currentQ = gameStatus.current_question;
-                setQuestion({
-                    id: currentQ.id || `q_${gameStatus.current_question_index}`,
-                    type: "free", // Use free text when no complete data available
-                    prompt: currentQ.prompt || "",
-                    options: [],
-                    answer: currentQ.answer || "",
-                });
-            } else {
+            } catch (error) {
+                console.error("Failed to fetch current question:", error);
                 setQuestion(null);
             }
         };
 
-        fetchCompleteQuestion();
+        fetchCurrentQuestion();
 
         // Extract players from the status
         if (gameStatus.players) {
