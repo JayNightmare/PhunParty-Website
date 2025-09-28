@@ -278,19 +278,6 @@ export default function ActiveQuiz() {
     const handleEndGame = async () => {
         if (!sessionId) return;
         try {
-            // Try WebSocket first if connected, fallback to HTTP API
-            if (isConnected && wsGameControls) {
-                wsGameControls.endGame();
-                success("Ending game via WebSocket...");
-                // Navigate after a short delay to allow WebSocket message to process
-                setTimeout(() => navigate(`/stats/${sessionId}`), 1000);
-            } else {
-                const response = await endGame({ session_code: sessionId });
-                if (response.success) {
-                    success("Game ended successfully");
-                    navigate(`/stats/${sessionId}`);
-                }
-            }
         } catch (error) {
             showError("Failed to end game");
         }

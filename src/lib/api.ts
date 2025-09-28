@@ -297,6 +297,7 @@ type BackendGameSession = {
     host_name: string;
     number_of_questions: number;
     game_code: string;
+    owner_player_id?: string;
 };
 
 type BackendGameStatus = {
@@ -714,42 +715,19 @@ export async function getGameTypes(): Promise<string[]> {
 }
 
 // Get user's created sessions from localStorage
-export async function getUserSessions(): Promise<GameResponse[]> {
-    const stored = localStorage.getItem("user_sessions");
+export async function getOwnedUserSessions(): Promise<GameResponse[]> {
+    const stored = localStorage.getItem("auth_user");
     if (!stored) return [];
 
     try {
-        const sessionCodes: string[] = JSON.parse(stored);
-        const sessions: GameResponse[] = [];
-
-        // Get status for each session to see if it's still valid
-        for (const sessionCode of sessionCodes) {
-            try {
-                const status = await getSessionStatus(sessionCode);
-                if (status) {
-                    // Create a GameResponse from the session status
-                    sessions.push({
-                        code: sessionCode,
-                        name: `Session ${sessionCode}`,
-                        status: status.game_state || "waiting",
-                    });
-                }
-            } catch (err) {
-                // Session might be expired/deleted, continue with others
-                console.warn(`Session ${sessionCode} no longer exists`);
-            }
-        }
-
-        // Update localStorage to remove invalid sessions
-        const validSessionCodes = sessions.map((s) => s.code);
-        localStorage.setItem(
-            "user_sessions",
-            JSON.stringify(validSessionCodes)
+        // Fetch owned session using user id and players/allOwnedSessions/{player_id}
+        const userId = JSON.parse(stored).id;
+        const raw = await apiFetch<BackendGameSession[]>(
+            `/players/allOwnedSessions/${encodeURIComponent(userId)}`
         );
-
-        return sessions;
+        return raw.map(mapSession);
     } catch (err) {
-        console.error("Error loading user sessions:", err);
+        console.error("Error loading owned user sessions:", err);
         return [];
     }
 }

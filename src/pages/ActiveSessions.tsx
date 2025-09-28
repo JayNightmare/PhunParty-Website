@@ -8,7 +8,7 @@ import { ToastContainer } from "@/components/Toast";
 import { useToast } from "@/hooks/useToast";
 import useGameUpdates from "@/hooks/useGameUpdates";
 import {
-    getUserSessions,
+    getOwnedUserSessions,
     getSessionStatus,
     startGame,
     GameStatusResponse,
@@ -32,7 +32,7 @@ export default function ActiveSessions() {
     const loadSessions = useCallback(async () => {
         try {
             setLoading(true);
-            const list = await getUserSessions();
+            const list = await getOwnedUserSessions();
             setSessions(list);
             if (!params.get("focus") && list[0]) {
                 nav(`/sessions?focus=${list[0].code}`, { replace: true });
@@ -44,16 +44,6 @@ export default function ActiveSessions() {
         }
     }, [nav, loc.search]);
 
-    const loadStatus = useCallback(async () => {
-        if (!focus) return;
-        try {
-            const s = await getSessionStatus(focus);
-            setStatus(s);
-        } catch (err: any) {
-            // Non-fatal; status maybe not yet available
-        }
-    }, [focus]);
-
     // Use real-time updates for the focused session
     const {
         gameStatus: realTimeStatus,
@@ -64,23 +54,6 @@ export default function ActiveSessions() {
         pollInterval: 3000,
         enableWebSocket: true,
     });
-
-    const handleStartGame = useCallback(async () => {
-        if (!focus) return;
-
-        try {
-            setStartingGame(true);
-            await startGame({ session_code: focus });
-            success("Game started successfully!");
-
-            // Real-time updates will automatically refresh the status            // Navigate to the active quiz page
-            nav(`/play/${focus}`);
-        } catch (err: any) {
-            toastError(err.message || "Failed to start game");
-        } finally {
-            setStartingGame(false);
-        }
-    }, [focus, success, toastError, nav]);
 
     useEffect(() => {
         loadSessions();
@@ -112,7 +85,7 @@ export default function ActiveSessions() {
                 <section>
                     <Card className="p-6 h-full">
                         <h2 className="text-xl font-semibold mb-4">
-                            Active Game Sessions
+                            Game Sessions
                         </h2>
                         <div className="space-y-2 max-h-[70vh] overflow-auto pr-2">
                             {loading && (
@@ -231,31 +204,6 @@ export default function ActiveSessions() {
                                         </div>
                                     )}
                                     <div className="mt-5 flex gap-2">
-                                        <LoadingButton
-                                            onClick={handleStartGame}
-                                            loading={startingGame}
-                                            loadingText="Starting..."
-                                            disabled={
-                                                currentStatus?.game_state ===
-                                                    "active" ||
-                                                !currentStatus?.players?.length
-                                            }
-                                            variant="primary"
-                                            title={
-                                                currentStatus?.game_state ===
-                                                "active"
-                                                    ? "Game is already active"
-                                                    : !currentStatus?.players
-                                                          ?.length
-                                                    ? "Need at least one player to start"
-                                                    : "Start the game"
-                                            }
-                                        >
-                                            {currentStatus?.game_state ===
-                                            "active"
-                                                ? "Game Active"
-                                                : "Start Game"}
-                                        </LoadingButton>
                                         <Link
                                             to={`/play/${focus}`}
                                             className="px-5 py-2 rounded-2xl bg-peach-500 text-ink-900 font-semibold"
