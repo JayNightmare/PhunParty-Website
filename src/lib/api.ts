@@ -507,7 +507,7 @@ export interface PasswordUpdateResponse {
 export interface StartGameRequest {
     session_code: string;
     // Optional flag to indicate the host completed the tutorial intro
-    isstarted?: boolean;
+    // isstarted?: boolean;
 }
 
 export interface StartGameResponse {
@@ -913,10 +913,13 @@ export async function startGame(
     data: StartGameRequest
 ): Promise<StartGameResponse> {
     // Allow an optional isstarted flag (ignored by backend if not supported)
-    return apiFetch<StartGameResponse>("/game-logic/start", {
-        method: "POST",
-        body: JSON.stringify({ ...data }),
-    });
+    return apiFetch<StartGameResponse>(
+        `/game-logic/start-game/${data.session_code}`,
+        {
+            method: "POST",
+            body: JSON.stringify({ ...data }),
+        }
+    );
 }
 
 // Game Control API Functions

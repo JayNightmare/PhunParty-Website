@@ -161,7 +161,7 @@ export default function ActiveQuiz() {
                     if (sessionId) {
                         await startGameApi({
                             session_code: sessionId,
-                            isstarted: true,
+                            // isstarted: true,
                         });
                     }
                 } catch (e) {
