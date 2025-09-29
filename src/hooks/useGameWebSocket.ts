@@ -52,6 +52,21 @@ export interface UseGameWebSocketReturn {
     endGame: () => void;
     getSessionStats: () => void;
 
+    // Player Joins/Leaves
+    onPlayerJoined?: (player: Player) => void;
+    onPlayerLeft?: (playerId: string) => void;
+
+    // Game state updates
+    onGameStarted?: () => void;
+    onGameEnded?: () => void;
+    onQuestionStarted?: (question: any) => void;
+    onPlayerAnswered?: (playerId: string, playerName: string) => void;
+    onBuzzerWinner?: (playerId: string, playerName: string) => void;
+    onCorrectAnswer?: (playerId: string, answer: string) => void;
+    onIncorrectAnswer?: (playerId: string, answer: string) => void;
+    onUIUpdate?: (uiState: any) => void;
+    onError?: (error: string) => void;
+
     // Player actions for mobile clients
     submitAnswer: (answer: string, questionId: string) => void;
     pressBuzzer: () => void;
