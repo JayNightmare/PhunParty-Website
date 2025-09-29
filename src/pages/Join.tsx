@@ -298,7 +298,7 @@ export default function Join() {
                         <ConnectionIndicator size="sm" showText />
                     </div>
 
-                    {!myId ? (
+                    {!name ? (
                         <div>
                             <div className="text-xl font-semibold mb-2">
                                 Join Game
