@@ -1,4 +1,4 @@
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Session, Question, MCQOption, Player } from "@/types";
 import Card from "@/components/Card";
@@ -11,6 +11,7 @@ import {
     nextQuestion,
     previousQuestion,
     endGame,
+    startGame as startGameApi,
 } from "@/lib/api";
 import Timer from "@/components/Timer";
 import useGameUpdates from "@/hooks/useGameUpdates";
@@ -26,6 +27,7 @@ import WebSocketDiagnostics from "@/components/WebSocketDiagnostics";
 
 export default function ActiveQuiz() {
     const { sessionId } = useParams();
+    const location = useLocation();
     const navigate = useNavigate();
     const [question, setQuestion] = useState<Question | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
@@ -35,6 +37,10 @@ export default function ActiveQuiz() {
     const { success, error: showError } = useToast();
     const containerRef = useRef<HTMLDivElement>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [introMode, setIntroMode] = useState(false); // whether we're in tutorial phase
+    const [countdown, setCountdown] = useState<number | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
     // Use the new real-time game updates hook
     const {
@@ -118,12 +124,72 @@ export default function ActiveQuiz() {
         return cleanup;
     }, [attachGestures]);
 
+    // Determine if intro should run (query param intro=1 on first load)
+    useEffect(() => {
+        if (location.search.includes("intro=1")) {
+            setIntroMode(true);
+        }
+    }, [location.search]);
+
+    // Handle intro audio playback
+    useEffect(() => {
+        if (!introMode) return;
+        // Only play once
+        if (!audioRef.current) {
+            const audio = new Audio("/audio/tutorial_voiceline1.mp3");
+            audioRef.current = audio;
+            audio.play().catch((err) => {
+                console.warn(
+                    "Intro audio failed to autoplay, waiting for user interaction.",
+                    err
+                );
+            });
+            audio.addEventListener("ended", () => {
+                // Start 3 second countdown, then start actual game start (send isstarted)
+                setCountdown(3);
+            });
+        }
+    }, [introMode]);
+
+    // Countdown logic after audio ends
+    useEffect(() => {
+        if (countdown === null) return;
+        if (countdown === 0) {
+            // Signal backend game officially started AFTER tutorial with isstarted flag
+            (async () => {
+                try {
+                    if (sessionId) {
+                        await startGameApi({
+                            session_code: sessionId,
+                            isstarted: true,
+                        });
+                    }
+                } catch (e) {
+                    console.warn("Failed to send isstarted flag", e);
+                } finally {
+                    setIntroMode(false);
+                }
+            })();
+            return;
+        }
+        countdownRef.current && clearTimeout(countdownRef.current);
+        countdownRef.current = setTimeout(
+            () => setCountdown((c) => (c ? c - 1 : 0)),
+            1000
+        );
+        return () => {
+            if (countdownRef.current) clearTimeout(countdownRef.current);
+        };
+    }, [countdown, sessionId]);
+
     // Process game status updates
     useEffect(() => {
         if (!gameStatus) return;
 
         // Determine game state
-        if (gameStatus.game_state) {
+        if (introMode) {
+            setGameState("waiting");
+        } else if (gameStatus.game_state) {
             // Map API state to component state
             switch (gameStatus.game_state) {
                 case "active":
@@ -300,7 +366,7 @@ export default function ActiveQuiz() {
         await handleNextQuestion();
     };
 
-    if (!gameStatus && loading) {
+    if (!gameStatus && loading && !introMode) {
         return (
             <main className="max-w-6xl mx-auto px-4 py-8">
                 <Card className="p-6">
@@ -310,7 +376,7 @@ export default function ActiveQuiz() {
         );
     }
 
-    if (!gameStatus)
+    if (!gameStatus && !introMode)
         return (
             <main className="max-w-6xl mx-auto px-4 py-8">
                 <Card className="p-6">
@@ -331,6 +397,40 @@ export default function ActiveQuiz() {
 
     const keyer = `${sessionId}-${question?.id}`;
     const playersAnswered = players.filter((p) => p.answeredCurrent).length;
+
+    // Intro screen overlay
+    if (introMode) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-black text-white">
+                <div className="text-center space-y-6">
+                    <h1 className="text-4xl font-bold tracking-wide">
+                        Get Ready!
+                    </h1>
+                    <p className="text-stone-300 max-w-md mx-auto">
+                        Listen to the brief tutorial. The game will start
+                        automatically.
+                    </p>
+                    {countdown !== null ? (
+                        <div className="text-6xl font-mono">{countdown}</div>
+                    ) : (
+                        <div className="animate-pulse text-tea-400">
+                            Playing tutorial audio...
+                        </div>
+                    )}
+                    <button
+                        onClick={() => {
+                            // Allow manual skip
+                            audioRef.current?.pause();
+                            setCountdown(0);
+                        }}
+                        className="px-6 py-3 bg-tea-500 text-ink-900 rounded-xl font-semibold hover:bg-tea-400 transition"
+                    >
+                        Skip
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div

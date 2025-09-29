@@ -15,6 +15,7 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import EditProfile from "@/pages/EditProfile";
 import ForgotPassword from "@/pages/ForgotPassword";
+import SessionWaitingRoom from "@/pages/SessionWaitingRoom";
 import { useEffect } from "react";
 import {
     preloadCriticalComponents,
@@ -67,6 +68,10 @@ export default function App() {
                             <Route
                                 path="/sessions"
                                 element={<ActiveSessions />}
+                            />
+                            <Route
+                                path="/session/:sessionCode/waiting"
+                                element={<SessionWaitingRoom />}
                             />
                             <Route
                                 path="/play/:sessionId"

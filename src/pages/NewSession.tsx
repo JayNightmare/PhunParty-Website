@@ -104,10 +104,9 @@ export default function NewSession() {
                 game_code: gameOfType.code, // Use actual game code
                 ispublic: true,
             });
-            showSuccess(
-                `Game session created successfully! Code: ${session.code}`
-            );
-            nav(`/sessions?focus=${session.code}`);
+            showSuccess(`Session created! Code: ${session.code}`);
+            // Navigate directly to waiting room for this session
+            nav(`/session/${session.code}/waiting`);
         } catch (err: any) {
             const errorMsg = err.message || "Failed to create session";
             setError(errorMsg);
