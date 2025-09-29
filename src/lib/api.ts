@@ -447,6 +447,7 @@ export interface SubmitAnswerRequest {
 export interface JoinGameRequest {
     session_code: string;
     player_id: string;
+    message?: string;
 }
 
 export interface LeaveGameResponse {

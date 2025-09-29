@@ -201,8 +201,13 @@ export default function Join() {
                 player_id: player.id,
             };
 
-            // Step 2: Join the game session with the created player ID
+            // Step 2: Join the game session with the player ID
             await joinGameSession(playerData);
+            const joinGameSessionData = await joinGameSession(playerData);
+            if (joinGameSessionData.message) {
+                // If message exists, it indicates an error
+                throw new Error(joinGameSessionData.message);
+            }
 
             showSuccess(`Welcome to the game, ${name.trim()}!`);
         } catch (err: any) {
