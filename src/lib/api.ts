@@ -242,6 +242,7 @@ export interface GameResponse {
 export interface GameStatusResponse {
     session_code: string;
     game_state: "waiting" | "active" | "completed";
+    isstarted?: boolean;
     current_question_index: number;
     total_questions: number;
     current_question: QuestionResponse | null;
@@ -304,6 +305,7 @@ type BackendGameStatus = {
     session_code: string;
     is_active: boolean;
     is_waiting_for_players: boolean;
+    isstarted?: boolean;
     current_question_index: number;
     total_questions: number;
     current_question?: {
@@ -389,10 +391,13 @@ const mapGameStatus = (raw: BackendGameStatus): GameStatusResponse => {
     return {
         session_code: raw.session_code,
         game_state: raw.is_active
-            ? "active"
+            ? raw.isstarted
+                ? "active"
+                : "waiting"
             : raw.is_waiting_for_players
             ? "waiting"
             : "completed",
+        isstarted: raw.isstarted,
         current_question_index: raw.current_question_index,
         total_questions: raw.total_questions,
         current_question,

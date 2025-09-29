@@ -209,7 +209,7 @@ export default function ActiveQuiz() {
 
         // Fetch current question for the session using getCurrentQuestion
         const fetchCurrentQuestion = async () => {
-            if (!sessionId) {
+            if (!sessionId || !gameStatus?.isstarted) {
                 setQuestion(null);
                 return;
             }

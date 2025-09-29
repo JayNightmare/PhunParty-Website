@@ -88,7 +88,8 @@ export default function Join() {
     }, [myId]);
 
     // Only fetch question data AFTER the game has actually started
-    const hasStarted = gameStatus?.game_state === "active";
+    // Game truly started only when backend sets isstarted flag
+    const hasStarted = !!gameStatus?.isstarted;
 
     useEffect(() => {
         const fetchCurrentQuestion = async () => {
