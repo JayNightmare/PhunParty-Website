@@ -43,7 +43,6 @@ export default function SessionWaitingRoom() {
     const handleStart = async () => {
         if (!sessionCode) return;
         setIsStarting(true);
-        wsStartGame();
         try {
             // Do NOT start the backend game yet; navigate to intro screen first
             showSuccess("Launching tutorial...");
@@ -51,6 +50,7 @@ export default function SessionWaitingRoom() {
         } catch (e: any) {
             showError(e.message || "Failed to launch intro");
         } finally {
+            wsStartGame();
             setIsStarting(false);
         }
     };

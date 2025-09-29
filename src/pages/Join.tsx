@@ -8,6 +8,7 @@ import {
     getSessionStatus,
     getCurrentQuestion,
     createPlayer,
+    leaveGameSession,
 } from "@/lib/api";
 import { LoadingButton, LoadingState } from "@/components/Loading";
 import { useToast } from "@/contexts/ToastContext";
@@ -31,6 +32,10 @@ export default function Join() {
     const [joinLoading, setJoinLoading] = useState(false);
     const [submitLoading, setSubmitLoading] = useState(false);
     const [joinError, setJoinError] = useState<string | null>(null);
+    const [pendingRejoin, setPendingRejoin] = useState<{
+        playerId: string;
+        targetSession: string;
+    } | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [nameTrigger, setNameTrigger] = useState(false);
 
@@ -201,9 +206,44 @@ export default function Join() {
 
             showSuccess(`Welcome to the game, ${name.trim()}!`);
         } catch (err: any) {
-            const errorMsg = err.message || "Failed to join session";
-            setJoinError(errorMsg);
-            showError(errorMsg);
+            const rawMessage = err.message || "Failed to join session";
+            // Backend sends {"detail":"Player is already in a game session"}
+            if (rawMessage.includes("Player is already in a game session")) {
+                try {
+                    const player = stored ? (JSON.parse(stored) as Player) : null;
+                    if (player) {
+                        setPendingRejoin({
+                            playerId: player.id,
+                            targetSession: sessionId || "",
+                        });
+                    }
+                } catch {}
+            }
+            setJoinError(rawMessage);
+            showError(rawMessage);
+        } finally {
+            setJoinLoading(false);
+        }
+    };
+
+    const leaveAndRejoin = async () => {
+        if (!pendingRejoin) return;
+        setJoinLoading(true);
+        setJoinError(null);
+        try {
+            await leaveGameSession(pendingRejoin.playerId);
+            showSuccess("Left previous session. Joining new session...");
+            // Attempt join again
+            await joinGameSession({
+                session_code: pendingRejoin.targetSession,
+                player_id: pendingRejoin.playerId,
+            });
+            showSuccess(`Welcome to the game, ${name.trim() || "Player"}!`);
+            setPendingRejoin(null);
+        } catch (err: any) {
+            const msg = err.message || "Failed to leave previous session";
+            setJoinError(msg);
+            showError(msg);
         } finally {
             setJoinLoading(false);
         }
@@ -362,8 +402,18 @@ export default function Join() {
                                 </LoadingButton>
 
                                 {joinError && (
-                                    <div className="p-3 bg-red-900/20 border border-red-800 rounded-xl text-red-400 text-sm">
-                                        {joinError}
+                                    <div className="p-3 bg-red-900/20 border border-red-800 rounded-xl text-red-400 text-sm space-y-3">
+                                        <div>{joinError}</div>
+                                        {pendingRejoin && (
+                                            <button
+                                                type="button"
+                                                onClick={leaveAndRejoin}
+                                                className="w-full px-4 py-2 rounded-xl bg-tea-600 hover:bg-tea-500 text-ink-900 font-semibold transition-colors disabled:opacity-50"
+                                                disabled={joinLoading}
+                                            >
+                                                Leave Current Session & Join This One
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>

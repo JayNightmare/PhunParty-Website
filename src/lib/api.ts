@@ -449,6 +449,11 @@ export interface JoinGameRequest {
     player_id: string;
 }
 
+export interface LeaveGameResponse {
+    message: string;
+    left_session_code?: string;
+}
+
 export interface CreatePlayerRequest {
     player_name: string;
     player_email: string;
@@ -769,6 +774,15 @@ export async function joinGameSession(
     return {
         message: res.message,
     };
+}
+
+export async function leaveGameSession(
+    player_id: string
+): Promise<LeaveGameResponse> {
+    return apiFetch<LeaveGameResponse>(
+        `/game/leave?player_id=${encodeURIComponent(player_id)}`,
+        { method: "POST" }
+    );
 }
 
 export async function login(data: LoginRequest): Promise<LoginResponse> {
