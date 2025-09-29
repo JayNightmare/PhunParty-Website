@@ -142,6 +142,8 @@ export default function Join() {
                 try {
                     const playerData = JSON.parse(stored);
                     setMyId(playerData.id);
+                    // Have the user enter their name each time for better UX
+                    setName("");
                 } catch (error) {
                     console.error("Failed to parse stored player data:", error);
                 }
