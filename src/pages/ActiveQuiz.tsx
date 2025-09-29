@@ -353,7 +353,7 @@ export default function ActiveQuiz() {
             if (response.success) {
                 success("Game ended successfully");
                 await refetch();
-                navigate(`/session/${sessionId}/results`);
+                navigate(`/#/stats/${sessionId}/`);
             }
             // }
         } catch (error) {
