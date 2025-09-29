@@ -205,7 +205,18 @@ export default function ActiveSessions() {
                                     )}
                                     <div className="mt-5 flex gap-2">
                                         <Link
-                                            to={`/play/${focus}`}
+                                            to={
+                                                currentStatus?.game_state ===
+                                                "active"
+                                                    ? `/play/${focus}`
+                                                    : `/session/${
+                                                          sessions.find(
+                                                              (s) =>
+                                                                  s.code ===
+                                                                  focus
+                                                          )?.code
+                                                      }/waiting`
+                                            }
                                             className="px-5 py-2 rounded-2xl bg-peach-500 text-ink-900 font-semibold"
                                         >
                                             Go to quiz

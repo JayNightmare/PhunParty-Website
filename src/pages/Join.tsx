@@ -87,26 +87,24 @@ export default function Join() {
         }
     }, [myId]);
 
-    // Fetch current question for the session using getCurrentQuestion
+    // Only fetch question data AFTER the game has actually started
+    const hasStarted = gameStatus?.game_state === "active";
+
     useEffect(() => {
         const fetchCurrentQuestion = async () => {
-            if (!sessionId) {
-                setQuestion(null);
+            if (!sessionId || !hasStarted) {
+                // Clear any stale question if we reverted to waiting state
+                if (!hasStarted) setQuestion(null);
                 return;
             }
-
             try {
-                // Get current question for the session directly
                 const currentQuestion = await getCurrentQuestion(sessionId);
-
                 if (currentQuestion) {
-                    // Convert string options to MCQOption format
                     const mcqOptions =
                         currentQuestion.options?.map((option, index) => ({
                             id: `option_${index}`,
                             text: option,
                         })) || [];
-
                     setQuestion({
                         id: currentQuestion.id,
                         type: mcqOptions.length > 0 ? "mcq" : "free",
@@ -126,20 +124,13 @@ export default function Join() {
                 setQuestion(null);
             }
         };
-
-        // Fetch current question when:
-        // 1. Game status changes (new question might be available)
-        // 2. Player joins (need to get current question)
-        // 3. Component mounts with a session ID
-        if (gameStatus || myId) {
+        // Trigger fetch when game starts or question index changes
+        if (hasStarted) {
             fetchCurrentQuestion();
+        } else {
+            setQuestion(null);
         }
-    }, [
-        sessionId,
-        gameStatus?.current_question_index,
-        gameStatus?.game_state,
-        myId,
-    ]);
+    }, [sessionId, hasStarted, gameStatus?.current_question_index]);
 
     // Check if player is already joined from localStorage
     useEffect(() => {
@@ -179,8 +170,8 @@ export default function Join() {
             console.log("Joining as player:", player);
 
             const playerData = {
-                player_id: player.id,
                 session_code: sessionId,
+                player_id: player.id,
             };
 
             // Step 2: Join the game session with the created player ID
@@ -198,7 +189,7 @@ export default function Join() {
 
     // Submit answer
     const submit = async (v: string) => {
-        if (!sessionId || !question || !myId) return;
+        if (!sessionId || !question || !myId || !hasStarted) return;
 
         setSubmitLoading(true);
 
@@ -361,14 +352,32 @@ export default function Join() {
                                 Welcome, {name}!
                             </div>
                             <div className="text-sm text-stone-400 mb-4">
-                                {question
-                                    ? `Question ${
-                                          gameStatus.current_question_index + 1
-                                      }/${gameStatus.total_questions}`
-                                    : "Waiting for next question..."}
+                                {!hasStarted &&
+                                    "Waiting for host to start the game..."}
+                                {hasStarted &&
+                                    question &&
+                                    `Question ${
+                                        gameStatus.current_question_index + 1
+                                    }/${gameStatus.total_questions}`}
+                                {hasStarted &&
+                                    !question &&
+                                    "Waiting for next question..."}
                             </div>
 
-                            {question ? (
+                            {!hasStarted ? (
+                                <div className="text-center py-12">
+                                    <div className="text-4xl mb-4">🕒</div>
+                                    <div className="text-stone-300 font-medium">
+                                        You're in! Waiting for the host to
+                                        start.
+                                    </div>
+                                    <div className="text-xs text-stone-500 mt-2">
+                                        {isConnected
+                                            ? "Connected for real-time updates"
+                                            : "Connecting..."}
+                                    </div>
+                                </div>
+                            ) : question ? (
                                 <div className="space-y-4">
                                     <div className="p-4 bg-ink-800 rounded-xl">
                                         <div className="text-lg font-medium mb-4">
@@ -433,8 +442,7 @@ export default function Join() {
                                 <div className="text-center py-8">
                                     <div className="text-4xl mb-4">⏳</div>
                                     <div className="text-stone-400">
-                                        Waiting for the host to start the next
-                                        question...
+                                        Waiting for the host to advance...
                                     </div>
                                     <div className="text-xs text-stone-500 mt-2">
                                         {isConnected

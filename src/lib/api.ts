@@ -921,12 +921,12 @@ export async function updatePassword(
 export async function startGame(
     data: StartGameRequest
 ): Promise<StartGameResponse> {
-    // Allow an optional isstarted flag (ignored by backend if not supported)
+    // Backend expects a PUT with no body for start-game; body ignored if sent
     return apiFetch<StartGameResponse>(
         `/game-logic/start-game/${data.session_code}`,
         {
-            method: "POST",
-            body: JSON.stringify({ ...data }),
+            method: "PUT",
+            body: JSON.stringify({}),
         }
     );
 }
@@ -1022,9 +1022,29 @@ export async function previousQuestion(
 
 // ! END GAME ROUTE DOESN'T EXIST YET IN BACKEND ! \\
 export async function endGame(data: EndGameRequest): Promise<EndGameResponse> {
-    return apiFetch<EndGameResponse>("/game-logic/end", {
-        method: "POST",
-        body: JSON.stringify(data),
-    });
+    // Calls new backend route /game/end-game/{session_code}
+    const raw = await apiFetch<any>(
+        `/game/end-game/${encodeURIComponent(data.session_code)}`,
+        {
+            method: "POST",
+        }
+    );
+
+    // Normalize backend response to EndGameResponse
+    if (raw && raw.final_results) {
+        return {
+            success: true,
+            message: "Game ended successfully",
+            final_scores: raw.final_results.map((r: any) => ({
+                player_id: r.player_id,
+                player_name: r.player_id, // placeholder; backend doesn't include name here
+                score: r.score,
+            })),
+        };
+    }
+    return {
+        success: true,
+        message: raw?.message || "Game ended",
+    };
 }
 // ! ------------------------------------------- ! \\

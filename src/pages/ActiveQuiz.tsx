@@ -159,10 +159,8 @@ export default function ActiveQuiz() {
             (async () => {
                 try {
                     if (sessionId) {
-                        await startGameApi({
-                            session_code: sessionId,
-                            // isstarted: true,
-                        });
+                        // Start game after tutorial intro completes
+                        await startGameApi({ session_code: sessionId });
                     }
                 } catch (e) {
                     console.warn("Failed to send isstarted flag", e);

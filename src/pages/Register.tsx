@@ -67,9 +67,9 @@ export default function Register() {
 
         try {
             await register({
-                name: formData.name.trim(),
-                email: formData.email.trim(),
-                mobile: formData.mobile.trim() || undefined,
+                player_name: formData.name.trim(),
+                player_email: formData.email.trim(),
+                player_mobile: formData.mobile.trim() || undefined,
                 password: formData.password,
             });
             showSuccess(
