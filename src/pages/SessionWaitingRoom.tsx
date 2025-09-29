@@ -107,7 +107,7 @@ export default function SessionWaitingRoom() {
                                 </div>
                                 <LoadingButton
                                     onClick={() =>
-                                        navigate(`/play/${sessionCode}`)
+                                        navigate(`/play/${sessionCode}?intro=1`)
                                     }
                                     isLoading={false}
                                     className="px-6 py-3"
