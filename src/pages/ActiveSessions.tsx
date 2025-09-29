@@ -24,7 +24,6 @@ export default function ActiveSessions() {
     const [sessions, setSessions] = useState<GameResponse[]>([]);
     const [status, setStatus] = useState<GameStatusResponse | null>(null);
     const [loading, setLoading] = useState(false);
-    const [startingGame, setStartingGame] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const focus = params.get("focus") || sessions[0]?.code;
     const { toasts, removeToast, success, error: toastError } = useToast();

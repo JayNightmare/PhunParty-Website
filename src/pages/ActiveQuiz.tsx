@@ -187,6 +187,8 @@ export default function ActiveQuiz() {
         // Determine game state
         if (introMode) {
             setGameState("waiting");
+        } else if (!introMode) {
+            setGameState("active");
         } else if (gameStatus.game_state) {
             // Map API state to component state
             switch (gameStatus.game_state) {
