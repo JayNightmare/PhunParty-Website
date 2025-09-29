@@ -177,8 +177,6 @@ export default function Join() {
 
             const player = JSON.parse(p);
             console.log("Joining as player:", player);
-            setMyId(player.id);
-            setName(player.name);
 
             const playerData = {
                 player_id: player.id,

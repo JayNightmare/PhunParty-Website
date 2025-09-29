@@ -443,8 +443,8 @@ export interface SubmitAnswerRequest {
 }
 
 export interface JoinGameRequest {
-    player_id: string;
     session_code: string;
+    player_id: string;
 }
 
 export interface CreatePlayerRequest {
@@ -756,15 +756,24 @@ export function addUserSession(sessionCode: string): void {
 export async function joinGameSession(
     data: JoinGameRequest
 ): Promise<JoinGameResponse> {
-    const raw = await apiFetch<{ message: string }>("/game/join", {
+    // Backend currently returns only { message }, but future-proof for extra fields
+    const raw = await apiFetch<{
+        message: string;
+        player_id?: string;
+        session_code?: string;
+    }>("/game/join", {
         method: "POST",
         body: JSON.stringify(data),
     });
 
+    const player_id = raw.player_id ?? data.player_id;
+    const session_code = raw.session_code ?? data.session_code;
+
     return {
         message: raw.message,
-        player_id: data.player_id,
-        session_code: data.session_code,
+        player_id,
+        session_code,
+        id: player_id, // mirror for optional id field
     };
 }
 
