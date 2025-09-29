@@ -26,12 +26,7 @@ export default function SessionWaitingRoom() {
         pollInterval: 3000,
     });
 
-    // Redirect if session already active
-    useEffect(() => {
-        if (gameStatus?.game_state === "active") {
-            navigate(`/play/${sessionCode}`);
-        }
-    }, [gameStatus?.game_state, sessionCode, navigate]);
+    // We intentionally do NOT auto-redirect anymore so the host can wait even if backend marks session active.
 
     if (!gameStatus) {
         return (
@@ -104,14 +99,32 @@ export default function SessionWaitingRoom() {
                                 {joinUrl}
                             </div>
                         </div>
-                        <LoadingButton
-                            onClick={handleStart}
-                            isLoading={isStarting}
-                            loadingText="Starting..."
-                            className="px-6 py-3"
-                        >
-                            Start Game
-                        </LoadingButton>
+                        {gameStatus.game_state === "active" ? (
+                            <div className="space-y-3">
+                                <div className="p-3 bg-ink-800 rounded-xl text-sm text-tea-400 border border-tea-500/20">
+                                    Game already marked active. You can enter
+                                    the live quiz.
+                                </div>
+                                <LoadingButton
+                                    onClick={() =>
+                                        navigate(`/play/${sessionCode}`)
+                                    }
+                                    isLoading={false}
+                                    className="px-6 py-3"
+                                >
+                                    Enter Game
+                                </LoadingButton>
+                            </div>
+                        ) : (
+                            <LoadingButton
+                                onClick={handleStart}
+                                isLoading={isStarting}
+                                loadingText="Starting..."
+                                className="px-6 py-3"
+                            >
+                                Start Game
+                            </LoadingButton>
+                        )}
                     </div>
                     <div className="w-56 self-start">
                         <QR value={joinUrl} />
