@@ -35,6 +35,16 @@ export default function Join() {
     const [nameTrigger, setNameTrigger] = useState(false);
 
     // Use real-time game updates
+    // Determine when to open a real-time (mobile) WebSocket connection.
+    // Previously we always connected as a generic "web" client, so the backend
+    // didn't classify this participant as a mobile player and therefore did
+    // not broadcast a player_joined event to the host waiting room.
+    // We now:
+    // 1. Wait until the user actually joins (nameTrigger true + we have player id)
+    // 2. Connect with clientType "mobile" + playerId + playerName so backend
+    //    ConnectionManager.connect() broadcasts player_joined to web clients (hosts).
+    const isJoined = !!myId && nameTrigger;
+
     const {
         gameStatus,
         isConnected,
@@ -44,7 +54,13 @@ export default function Join() {
         sendMessage,
     } = useGameUpdates({
         sessionCode: sessionId || "",
-        enableWebSocket: true,
+        // Only enable the WebSocket after the player has formally joined; until then
+        // we rely purely on REST status (fewer unnecessary connections & avoids
+        // misclassification as a web client).
+        enableWebSocket: isJoined,
+        clientType: isJoined ? "mobile" : "web",
+        playerId: isJoined ? myId || undefined : undefined,
+        playerName: isJoined ? name || undefined : undefined,
     });
 
     const stored = localStorage.getItem(`auth_user`);
