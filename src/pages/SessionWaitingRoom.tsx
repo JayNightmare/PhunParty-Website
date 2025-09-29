@@ -22,8 +22,8 @@ export default function SessionWaitingRoom() {
         startGame: wsStartGame,
     } = useGameUpdates({
         sessionCode: sessionCode || "",
-        enableWebSocket: true,
         pollInterval: 3000,
+        enableWebSocket: true,
     });
 
     // We intentionally do NOT auto-redirect anymore so the host can wait even if backend marks session active.
@@ -43,6 +43,7 @@ export default function SessionWaitingRoom() {
     const handleStart = async () => {
         if (!sessionCode) return;
         setIsStarting(true);
+        wsStartGame();
         try {
             // Do NOT start the backend game yet; navigate to intro screen first
             showSuccess("Launching tutorial...");

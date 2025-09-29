@@ -37,6 +37,10 @@ export default function ActiveSessions() {
             if (!params.get("focus") && list[0]) {
                 nav(`/sessions?focus=${list[0].code}`, { replace: true });
             }
+            if (focus) {
+                const stat = await getSessionStatus(focus);
+                setStatus(stat);
+            }
         } catch (err: any) {
             setError(err.message || "Failed to load sessions");
         } finally {
