@@ -605,7 +605,7 @@ export default function ActiveQuiz() {
                     </section>
 
                     {/* WebSocket Diagnostics - Development Only */}
-                    {import.meta.env.DEV && sessionId && (
+                    {import.meta.env.VITE_DEV && sessionId && (
                         <section>
                             <WebSocketDiagnostics sessionCode={sessionId} />
                         </section>

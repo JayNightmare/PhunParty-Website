@@ -46,11 +46,16 @@ export default function SessionWaitingRoom() {
         try {
             // Do NOT start the backend game yet; navigate to intro screen first
             showSuccess("Launching tutorial...");
+            // Send WebSocket start signal BEFORE navigation to avoid unmount race
+            try {
+                wsStartGame();
+            } catch (e) {
+                console.warn("Failed to send start_game WS message early", e);
+            }
             navigate(`/play/${sessionCode}?intro=1`);
         } catch (e: any) {
             showError(e.message || "Failed to launch intro");
         } finally {
-            wsStartGame();
             setIsStarting(false);
         }
     };
