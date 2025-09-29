@@ -216,17 +216,19 @@ export const useGameWebSocket = (
                 case "game_started":
                     setGameState((prev) => {
                         if (!prev) return null;
-                        const normalizedQuestion = extractQuestion(
-                            message.data?.current_question
-                        ) || prev.currentQuestion;
+                        const normalizedQuestion =
+                            extractQuestion(message.data?.current_question) ||
+                            prev.currentQuestion;
                         return {
                             ...prev,
                             isActive: true,
                             currentQuestion: normalizedQuestion,
-                            connectedPlayers: prev.connectedPlayers.map((p) => ({
-                                ...p,
-                                answered_current: false,
-                            })),
+                            connectedPlayers: prev.connectedPlayers.map(
+                                (p) => ({
+                                    ...p,
+                                    answered_current: false,
+                                })
+                            ),
                             isStarted: true,
                         } as any;
                     });
