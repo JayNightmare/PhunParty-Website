@@ -210,7 +210,9 @@ export default function Join() {
             // Backend sends {"detail":"Player is already in a game session"}
             if (rawMessage.includes("Player is already in a game session")) {
                 try {
-                    const player = stored ? (JSON.parse(stored) as Player) : null;
+                    const player = stored
+                        ? (JSON.parse(stored) as Player)
+                        : null;
                     if (player) {
                         setPendingRejoin({
                             playerId: player.id,
@@ -411,7 +413,8 @@ export default function Join() {
                                                 className="w-full px-4 py-2 rounded-xl bg-tea-600 hover:bg-tea-500 text-ink-900 font-semibold transition-colors disabled:opacity-50"
                                                 disabled={joinLoading}
                                             >
-                                                Leave Current Session & Join This One
+                                                Leave Current Session & Join
+                                                This One
                                             </button>
                                         )}
                                     </div>

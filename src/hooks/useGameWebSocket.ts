@@ -199,6 +199,13 @@ export const useGameWebSocket = (
                                   currentQuestion:
                                       message.data?.current_question ||
                                       prev.currentQuestion,
+                                  connectedPlayers: prev.connectedPlayers.map(
+                                      (p) => ({
+                                          ...p,
+                                          answered_current: false,
+                                      })
+                                  ),
+                                  isStarted: true,
                               }
                             : null
                     );
