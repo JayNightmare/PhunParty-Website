@@ -126,9 +126,33 @@ export const useGameWebSocket = (
         (message: PhunPartyWebSocketMessage) => {
             console.log("Game WebSocket message:", message);
 
+            // Helper to normalize various backend payload shapes into a plain question object
+            const extractQuestion = (raw: any): any | null => {
+                if (!raw) return null;
+                // If already looks like a question (has question_id or prompt / question text), return as-is
+                if (
+                    typeof raw === "object" &&
+                    (raw.question_id || raw.question || raw.prompt)
+                ) {
+                    return raw;
+                }
+                // If backend sent the full status wrapper under current_question, dig deeper
+                if (
+                    raw.current_question &&
+                    (raw.current_question.question_id ||
+                        raw.current_question.question)
+                ) {
+                    return raw.current_question;
+                }
+                return null;
+            };
+
             switch (message.type) {
                 case "initial_state":
                     if (message.data) {
+                        const normalizedQuestion = extractQuestion(
+                            message.data.current_question
+                        );
                         setGameState({
                             sessionCode:
                                 message.data.session_code || sessionCode,
@@ -136,8 +160,7 @@ export const useGameWebSocket = (
                                 message.data.game_state?.game_type || "trivia",
                             isActive:
                                 message.data.game_state?.is_active || false,
-                            currentQuestion:
-                                message.data.current_question || null,
+                            currentQuestion: normalizedQuestion,
                             connectedPlayers:
                                 message.data.connected_players || [],
                             gameStats: message.data.connection_stats || null,
@@ -191,24 +214,22 @@ export const useGameWebSocket = (
                     break;
 
                 case "game_started":
-                    setGameState((prev) =>
-                        prev
-                            ? {
-                                  ...prev,
-                                  isActive: true,
-                                  currentQuestion:
-                                      message.data?.current_question ||
-                                      prev.currentQuestion,
-                                  connectedPlayers: prev.connectedPlayers.map(
-                                      (p) => ({
-                                          ...p,
-                                          answered_current: false,
-                                      })
-                                  ),
-                                  isStarted: true,
-                              }
-                            : null
-                    );
+                    setGameState((prev) => {
+                        if (!prev) return null;
+                        const normalizedQuestion = extractQuestion(
+                            message.data?.current_question
+                        ) || prev.currentQuestion;
+                        return {
+                            ...prev,
+                            isActive: true,
+                            currentQuestion: normalizedQuestion,
+                            connectedPlayers: prev.connectedPlayers.map((p) => ({
+                                ...p,
+                                answered_current: false,
+                            })),
+                            isStarted: true,
+                        } as any;
+                    });
                     onGameStarted?.();
                     break;
 
@@ -226,15 +247,13 @@ export const useGameWebSocket = (
                     break;
 
                 case "question_started":
-                    setGameState((prev) =>
-                        prev
-                            ? {
-                                  ...prev,
-                                  currentQuestion:
-                                      message.data?.question || message.data,
-                              }
-                            : null
-                    );
+                    setGameState((prev) => {
+                        if (!prev) return null;
+                        const normalized = extractQuestion(
+                            message.data?.question || message.data
+                        );
+                        return { ...prev, currentQuestion: normalized };
+                    });
                     onQuestionStarted?.(message.data);
                     break;
 

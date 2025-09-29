@@ -345,17 +345,17 @@ export default function ActiveQuiz() {
         if (!sessionId) return;
         try {
             // Try WebSocket first if connected, fallback to HTTP API
-            if (isConnected && wsGameControls) {
-                wsGameControls.endGame();
-                success("Ending game via WebSocket...");
-            } else {
-                const response = await endGame({ session_code: sessionId });
-                if (response.success) {
-                    success("Game ended successfully");
-                    await refetch();
-                    navigate(`/session/${sessionId}/results`);
-                }
+            // if (isConnected && wsGameControls) {
+            //     wsGameControls.endGame();
+            //     success("Ending game via WebSocket...");
+            // } else {
+            const response = await endGame({ session_code: sessionId });
+            if (response.success) {
+                success("Game ended successfully");
+                await refetch();
+                navigate(`/session/${sessionId}/results`);
             }
+            // }
         } catch (error) {
             showError("Failed to end game");
         }
