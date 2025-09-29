@@ -32,6 +32,7 @@ export default function Join() {
     const [submitLoading, setSubmitLoading] = useState(false);
     const [joinError, setJoinError] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [nameTrigger, setNameTrigger] = useState(false);
 
     // Use real-time game updates
     const {
@@ -160,6 +161,8 @@ export default function Join() {
             setJoinError("Please enter your name");
             return;
         }
+
+        setNameTrigger(true);
 
         setJoinLoading(true);
         setJoinError(null);
@@ -298,7 +301,7 @@ export default function Join() {
                         <ConnectionIndicator size="sm" showText />
                     </div>
 
-                    {!name ? (
+                    {!name && nameTrigger ? (
                         <div>
                             <div className="text-xl font-semibold mb-2">
                                 Join Game
