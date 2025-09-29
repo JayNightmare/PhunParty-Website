@@ -46,6 +46,8 @@ export default function Join() {
         enableWebSocket: true,
     });
 
+    const stored = localStorage.getItem(`auth_user`);
+
     // WebSocket game controls for real-time interactions
     const wsGameControls = useWebSocketGameControls({
         sendMessage: sendMessage || (() => {}),
@@ -133,20 +135,20 @@ export default function Join() {
         }
     }, [sessionId, hasStarted, gameStatus?.current_question_index]);
 
-    // Check if player is already joined from localStorage
+    // Load stored player ID and name if available
     useEffect(() => {
         if (sessionId) {
-            const stored = localStorage.getItem(`auth_user`);
             if (stored) {
                 try {
                     const playerData = JSON.parse(stored);
                     setMyId(playerData.id);
-                    setName(playerData.name);
                 } catch (error) {
-                    // Clear invalid stored data
-                    localStorage.removeItem(`player_${sessionId}`);
+                    console.error("Failed to parse stored player data:", error);
                 }
             }
+
+            // debug log to check the `stored` object
+            console.log("Stored player data:", stored);
         }
     }, [sessionId]);
 
@@ -161,13 +163,11 @@ export default function Join() {
         setJoinError(null);
 
         try {
-            const p = localStorage.getItem(`auth_user`);
-
-            if (!p) {
+            if (!stored) {
                 throw new Error("Player information not found in localStorage");
             }
 
-            const player = JSON.parse(p);
+            const player = JSON.parse(stored) as Player;
             console.log("Joining as player:", player);
 
             const playerData = {
