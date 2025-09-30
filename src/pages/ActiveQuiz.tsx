@@ -186,9 +186,13 @@ export default function ActiveQuiz() {
 
         // Determine game state
         if (introMode) {
-            setGameState("waiting");
-        } else if (!introMode) {
-            setGameState("active");
+            // During intro audio: game is "waiting"
+            // Once the audio finishes we start a countdown (countdown !== null). At that moment mark game "active".
+            if (countdown !== null) {
+                setGameState("active");
+            } else {
+                setGameState("waiting");
+            }
         } else if (gameStatus.game_state) {
             // Map API state to component state
             switch (gameStatus.game_state) {
@@ -202,10 +206,10 @@ export default function ActiveQuiz() {
                     setGameState("ended");
                     break;
                 default:
-                    setGameState("waiting");
+                    setGameState("ended");
             }
         } else {
-            // Default to active if no state provided but questions exist
+            // Default to active if no explicit state but a current question exists
             setGameState(gameStatus.current_question ? "active" : "waiting");
         }
 

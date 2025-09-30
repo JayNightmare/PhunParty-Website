@@ -88,7 +88,7 @@ export default function ActiveSessions() {
                 <section>
                     <Card className="p-6 h-full">
                         <h2 className="text-xl font-semibold mb-4">
-                            Game Sessions
+                            Active Game Sessions
                         </h2>
                         <div className="space-y-2 max-h-[70vh] overflow-auto pr-2">
                             {loading && (
