@@ -433,6 +433,7 @@ export default function ActiveQuiz() {
                             // Allow manual skip
                             audioRef.current?.pause();
                             setCountdown(3);
+                            next();
                         }}
                         className="px-6 py-3 bg-tea-500 text-ink-900 rounded-xl font-semibold hover:bg-tea-400 transition"
                     >
