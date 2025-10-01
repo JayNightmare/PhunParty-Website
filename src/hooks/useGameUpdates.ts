@@ -11,7 +11,8 @@ export interface GameUpdate {
         | "game_started"
         | "game_ended"
         | "answer_submitted"
-        | "buzzer_pressed";
+        | "buzzer_pressed"
+        | "next_question";
     sessionCode: string;
     timestamp: number;
     data: any;
