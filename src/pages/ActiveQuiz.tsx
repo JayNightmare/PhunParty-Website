@@ -41,6 +41,7 @@ export default function ActiveQuiz() {
     const [countdown, setCountdown] = useState<number | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const countdownRef = useRef<NodeJS.Timeout | null>(null);
+    const hasNavigatedToStats = useRef(false);
 
     // Use the new real-time game updates hook
     const {
@@ -293,6 +294,20 @@ export default function ActiveQuiz() {
         }
     }, [gameStatus]);
 
+    // Automatically navigate to stats page when the game completes
+    useEffect(() => {
+        if (!sessionId) return;
+
+        if (gameStatus?.game_state === "completed") {
+            if (!hasNavigatedToStats.current) {
+                hasNavigatedToStats.current = true;
+                navigate(`/stats/${sessionId}/`, { replace: true });
+            }
+        } else {
+            hasNavigatedToStats.current = false;
+        }
+    }, [gameStatus?.game_state, navigate, sessionId]);
+
     // Game Control Handlers
     const handlePause = async () => {
         if (!sessionId) return;
@@ -320,18 +335,18 @@ export default function ActiveQuiz() {
         if (!sessionId) return;
         try {
             // Try WebSocket first if connected, fallback to HTTP API
-            if (isConnected && wsGameControls) {
-                wsGameControls.nextQuestion();
-                success("Moving to next question via WebSocket...");
-            } else {
-                const response = await nextQuestion({
-                    session_code: sessionId,
-                });
-                if (response.success) {
-                    success("Moved to next question");
-                    await refetch();
-                }
-            }
+            // if (isConnected && wsGameControls) {
+            wsGameControls.nextQuestion();
+            success("Moving to next question via WebSocket...");
+            // } else {
+            //     const response = await nextQuestion({
+            //         session_code: sessionId,
+            //     });
+            //     if (response.success) {
+            //         success("Moved to next question");
+            //         await refetch();
+            //     }
+            // }
         } catch (error) {
             showError("Failed to go to next question");
         }
@@ -395,6 +410,7 @@ export default function ActiveQuiz() {
                         Session not found or failed to load.
                         <div className="mt-4">
                             <button
+                                type="button"
                                 onClick={refetch}
                                 className="px-4 py-2 bg-tea-500 text-ink-900 rounded-xl font-medium"
                             >
@@ -429,6 +445,7 @@ export default function ActiveQuiz() {
                         </div>
                     )}
                     <button
+                        type="button"
                         onClick={() => {
                             // Allow manual skip
                             audioRef.current?.pause();
