@@ -147,6 +147,7 @@ export default function ActiveQuiz() {
             audio.addEventListener("ended", () => {
                 // Start 3 second countdown, then start actual game start (send isstarted)
                 setCountdown(3);
+                next();
             });
         }
     }, [introMode]);
@@ -431,7 +432,7 @@ export default function ActiveQuiz() {
                         onClick={() => {
                             // Allow manual skip
                             audioRef.current?.pause();
-                            setCountdown(0);
+                            setCountdown(3);
                         }}
                         className="px-6 py-3 bg-tea-500 text-ink-900 rounded-xl font-semibold hover:bg-tea-400 transition"
                     >
