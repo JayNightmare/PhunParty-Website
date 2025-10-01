@@ -248,10 +248,14 @@ export interface GameResponse {
     status: string;
 }
 
+export interface IsStartedResponse {
+    isstarted: boolean;
+}
+
 export interface GameStatusResponse {
     session_code: string;
     game_state: "waiting" | "active" | "completed";
-    isstarted?: boolean;
+    isstarted: IsStartedResponse["isstarted"];
     current_question_index: number;
     total_questions: number;
     current_question: QuestionResponse | null;
@@ -311,7 +315,7 @@ type BackendGameStatus = {
     session_code: string;
     is_active: boolean;
     is_waiting_for_players: boolean;
-    isstarted?: boolean;
+    isstarted: IsStartedResponse["isstarted"];
     current_question_index: number;
     total_questions: number;
     current_question?: {
