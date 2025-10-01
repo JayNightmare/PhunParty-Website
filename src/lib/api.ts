@@ -121,74 +121,83 @@ async function apiFetch<T>(
     init: RequestInit = {},
     parseJson = true
 ): Promise<T> {
-    const headers = new Headers(init.headers ?? undefined);
+    try {
+        const headers = new Headers(init.headers ?? undefined);
 
-    if (API_KEY && !headers.has("x-api-key")) {
-        headers.set("x-api-key", API_KEY);
-    }
-
-    if (init.body && !headers.has("Content-Type")) {
-        headers.set("Content-Type", "application/json");
-    }
-
-    // Add additional headers that might help with CORS
-    if (!headers.has("Accept")) {
-        headers.set("Accept", "application/json");
-    }
-
-    // Debug logging
-    console.log("API Request:", {
-        url: buildUrl(path),
-        method: init.method || "GET",
-        headers: Object.fromEntries(headers.entries()),
-        body: init.body,
-    });
-
-    const response = await fetch(buildUrl(path), { ...init, headers });
-
-    if (!response.ok) {
-        let message: string | undefined;
-
-        try {
-            message = await response.text();
-        } catch {
-            message = undefined;
+        if (API_KEY && !headers.has("x-api-key")) {
+            headers.set("x-api-key", API_KEY);
         }
 
-        throw new Error(
-            message || `Request failed with status ${response.status}`
-        );
-    }
+        if (init.body && !headers.has("Content-Type")) {
+            headers.set("Content-Type", "application/json");
+        }
 
-    if (!parseJson || response.status === 204) {
-        return undefined as T;
-    }
+        // Add additional headers that might help with CORS
+        if (!headers.has("Accept")) {
+            headers.set("Accept", "application/json");
+        }
 
-    // Get response text first to handle both JSON and non-JSON responses
-    const responseText = await response.text();
+        // Debug logging
+        console.log("API Request:", {
+            url: buildUrl(path),
+            method: init.method || "GET",
+            headers: Object.fromEntries(headers.entries()),
+            body: init.body,
+        });
 
-    // Check if response is actually JSON
-    const contentType = response.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-        console.error("Expected JSON but received:", contentType, responseText);
-        throw new Error(
-            `Expected JSON response but received: ${contentType}. Response: ${responseText.substring(
-                0,
-                200
-            )}...`
-        );
-    }
+        const response = await fetch(buildUrl(path), { ...init, headers });
 
-    try {
-        return JSON.parse(responseText) as T;
+        if (!response.ok) {
+            let message: string | undefined;
+
+            try {
+                message = await response.text();
+            } catch {
+                message = undefined;
+            }
+
+            throw new Error(
+                message || `Request failed with status ${response.status}`
+            );
+        }
+
+        if (!parseJson || response.status === 204) {
+            return undefined as T;
+        }
+
+        // Get response text first to handle both JSON and non-JSON responses
+        const responseText = await response.text();
+
+        // Check if response is actually JSON
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            console.error(
+                "Expected JSON but received:",
+                contentType,
+                responseText
+            );
+            throw new Error(
+                `Expected JSON response but received: ${contentType}. Response: ${responseText.substring(
+                    0,
+                    200
+                )}...`
+            );
+        }
+
+        try {
+            return JSON.parse(responseText) as T;
+        } catch (error) {
+            console.error("JSON parse error. Response text:", responseText);
+            throw new Error(
+                `Failed to parse JSON response: ${error}. Response: ${responseText.substring(
+                    0,
+                    200
+                )}...`
+            );
+        }
     } catch (error) {
-        console.error("JSON parse error. Response text:", responseText);
-        throw new Error(
-            `Failed to parse JSON response: ${error}. Response: ${responseText.substring(
-                0,
-                200
-            )}...`
-        );
+        console.error("API fetch error:", error);
+        throw error;
     }
 }
 
@@ -658,6 +667,7 @@ export async function getSessionStatus(
     const raw = await apiFetch<BackendGameStatus>(
         `/game-logic/status/${encodeURIComponent(session_code)}`
     );
+    console.log("Raw game status:", raw);
     return mapGameStatus(raw);
 }
 
