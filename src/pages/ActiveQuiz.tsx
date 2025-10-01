@@ -32,7 +32,7 @@ export default function ActiveQuiz() {
     const [question, setQuestion] = useState<Question | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
     const [gameState, setGameState] = useState<
-        "waiting" | "active" | "paused" | "ended"
+        "waiting" | "active" | "paused" | "completed"
     >("waiting");
     const { success, error: showError } = useToast();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -205,10 +205,10 @@ export default function ActiveQuiz() {
                     setGameState("waiting");
                     break;
                 case "completed":
-                    setGameState("ended");
+                    setGameState("completed");
                     break;
                 default:
-                    setGameState("ended");
+                    setGameState("completed");
             }
         } else {
             // Default to active if no explicit state but a current question exists
