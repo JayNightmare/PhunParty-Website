@@ -216,6 +216,12 @@ export default function ActiveQuiz() {
         // Fetch current question for the session using getCurrentQuestion
         const fetchCurrentQuestion = async () => {
             if (!sessionId || !gameStatus?.isstarted) {
+                console.warn(
+                    "Session ID or game not started, cannot fetch question"
+                );
+                console.warn(
+                    `sessionId: ${sessionId}, isstarted: ${gameStatus?.isstarted}`
+                );
                 setQuestion(null);
                 return;
             }
