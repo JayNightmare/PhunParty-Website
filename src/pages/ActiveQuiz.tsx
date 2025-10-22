@@ -148,7 +148,7 @@ export default function ActiveQuiz() {
             audio.addEventListener("ended", () => {
                 // Start 3 second countdown, then start actual game start (send isstarted)
                 setCountdown(3);
-                next();
+                // Do NOT advance questions here; we'll start the game after countdown completes
             });
         }
     }, [introMode]);
@@ -449,8 +449,8 @@ export default function ActiveQuiz() {
                         onClick={() => {
                             // Allow manual skip
                             audioRef.current?.pause();
+                            // Start the same 3-second countdown path
                             setCountdown(3);
-                            next();
                         }}
                         className="px-6 py-3 bg-tea-500 text-ink-900 rounded-xl font-semibold hover:bg-tea-400 transition"
                     >
@@ -486,7 +486,9 @@ export default function ActiveQuiz() {
                 {/* Game State and Controls */}
                 <div className="grid md:grid-cols-2 gap-4">
                     <GameStateIndicator
-                        gameState={gameState}
+                        gameState={
+                            gameState === "completed" ? "ended" : gameState
+                        }
                         currentQuestion={
                             gameStatus?.current_question_index
                                 ? gameStatus.current_question_index + 1
@@ -544,7 +546,7 @@ export default function ActiveQuiz() {
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-xl font-semibold">
                                     Question{" "}
-                                    {(gameStatus?.current_question_index || 0) +
+                                    {(gameStatus?.current_question_index ?? 0) +
                                         1}{" "}
                                     of {gameStatus?.total_questions || 0}
                                 </h2>

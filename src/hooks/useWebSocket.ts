@@ -30,7 +30,12 @@ export type WebSocketMessageType =
     | "start_game"
     | "end_game"
     | "get_session_stats"
-    | "error";
+    | "error"
+    // New broadcast channel message types for Q&A
+    | "qa_update"
+    | "qa_question"
+    | "qa_answer_submitted"
+    | "broadcast_state";
 
 export interface PhunPartyWebSocketMessage {
     type: WebSocketMessageType;

@@ -148,6 +148,130 @@ export const useGameWebSocket = (
             };
 
             switch (message.type) {
+                // New broadcast messages for questions/answers
+                case "qa_question": {
+                    setGameState((prev) => {
+                        const normalized = extractQuestion(
+                            message.data?.question || message.data
+                        );
+                        if (!prev) {
+                            return {
+                                sessionCode,
+                                gameType: "trivia",
+                                isActive: true,
+                                currentQuestion: normalized,
+                                connectedPlayers: [],
+                                gameStats: null,
+                            };
+                        }
+                        return {
+                            ...prev,
+                            isActive: true,
+                            currentQuestion: normalized,
+                            connectedPlayers: prev.connectedPlayers.map(
+                                (p) => ({
+                                    ...p,
+                                    answered_current: false,
+                                })
+                            ),
+                        };
+                    });
+                    onQuestionStarted?.(message.data);
+                    break;
+                }
+
+                case "qa_answer_submitted": {
+                    // Normalize into player_answered semantics
+                    const playerId = message.data?.player_id;
+                    const playerName = message.data?.player_name;
+                    if (playerId) {
+                        setGameState((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      connectedPlayers:
+                                          prev.connectedPlayers.map((p) =>
+                                              p.player_id === playerId
+                                                  ? {
+                                                        ...p,
+                                                        answered_current: true,
+                                                    }
+                                                  : p
+                                          ),
+                                  }
+                                : null
+                        );
+                        onPlayerAnswered?.(playerId, playerName);
+                    }
+                    break;
+                }
+
+                case "qa_update": {
+                    // Generic broadcast update: may include current_question, players, stats, etc.
+                    const data = message.data || {};
+                    const normalizedQuestion = extractQuestion(
+                        data.current_question || data.question || data
+                    );
+
+                    setGameState((prev) => {
+                        const base =
+                            prev ||
+                            ({
+                                sessionCode,
+                                gameType: "trivia",
+                                isActive: true,
+                                currentQuestion: null,
+                                connectedPlayers: [],
+                                gameStats: null,
+                            } as GameState);
+
+                        // Optionally replace connectedPlayers if provided in broadcast
+                        let connectedPlayers = base.connectedPlayers;
+                        if (Array.isArray(data.players)) {
+                            connectedPlayers = data.players.map((pl: any) => ({
+                                player_id: pl.player_id || pl.id,
+                                player_name: pl.player_name || pl.name,
+                                player_photo: pl.player_photo,
+                                answered_current:
+                                    pl.answered_current ?? pl.answered ?? false,
+                                score: pl.score,
+                            })) as Player[];
+                        }
+
+                        return {
+                            ...base,
+                            isActive: data.is_active ?? base.isActive,
+                            currentQuestion:
+                                normalizedQuestion ?? base.currentQuestion,
+                            connectedPlayers,
+                            gameStats: data.connection_stats ?? base.gameStats,
+                        };
+                    });
+                    break;
+                }
+
+                case "broadcast_state": {
+                    // Broad state update; treat similar to qa_update
+                    const data = message.data || {};
+                    setGameState((prev) => ({
+                        ...(prev || {
+                            sessionCode,
+                            gameType: "trivia",
+                            isActive: !!data.is_active,
+                            currentQuestion: null,
+                            connectedPlayers: [],
+                            gameStats: null,
+                        }),
+                        isActive: data.is_active ?? prev?.isActive ?? false,
+                        currentQuestion:
+                            data.current_question ||
+                            prev?.currentQuestion ||
+                            null,
+                        gameStats:
+                            data.connection_stats ?? prev?.gameStats ?? null,
+                    }));
+                    break;
+                }
                 case "initial_state":
                     if (message.data) {
                         const normalizedQuestion = extractQuestion(
