@@ -42,6 +42,8 @@ export default function ActiveQuiz() {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const countdownRef = useRef<NodeJS.Timeout | null>(null);
     const hasNavigatedToStats = useRef(false);
+    // Timer duration based on difficulty – must be declared before any conditional returns
+    const [timerMs, setTimerMs] = useState<number>(30000);
 
     // Use the new real-time game updates hook
     const {
@@ -125,6 +127,15 @@ export default function ActiveQuiz() {
         const cleanup = attachGestures(containerRef.current);
         return cleanup;
     }, [attachGestures]);
+
+    // Keep timer in sync with question difficulty
+    useEffect(() => {
+        const diff = (question?.difficulty || "Easy") as any;
+        const norm = typeof diff === "string" ? diff.toLowerCase() : "easy";
+        if (norm === "hard") setTimerMs(15000);
+        else if (norm === "medium") setTimerMs(20000);
+        else setTimerMs(30000);
+    }, [question?.difficulty]);
 
     // Determine if intro should run (query param intro=1 on first load)
     useEffect(() => {
@@ -455,16 +466,7 @@ export default function ActiveQuiz() {
             </main>
         );
 
-    // Timer duration based on difficulty
-    const [timerMs, setTimerMs] = useState<number>(30000);
     const keyer = `${sessionId}-${question?.id}`;
-    useEffect(() => {
-        const diff = (question?.difficulty || "Easy") as any;
-        const norm = typeof diff === "string" ? diff.toLowerCase() : "easy";
-        if (norm === "hard") setTimerMs(15000);
-        else if (norm === "medium") setTimerMs(20000);
-        else setTimerMs(30000);
-    }, [question?.difficulty]);
     const playersAnswered = players.filter((p) => p.answeredCurrent).length;
 
     // Intro screen overlay
