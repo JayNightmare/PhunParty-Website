@@ -117,12 +117,11 @@ export default function Join() {
     const hasStarted = !!gameStatus?.isstarted;
 
     useEffect(() => {
-        // Prefer WebSocket question for real-time updates once started
+        // Prefer WebSocket question for real-time updates.
+        // Important: don't gate WS updates behind `hasStarted`.
+        // The WS can deliver a question slightly before REST `isstarted` flips,
+        // which would otherwise hide the question from users.
         const wsQ = (gameState as any)?.currentQuestion;
-        if (!hasStarted) {
-            setQuestion(null);
-            return;
-        }
         if (wsQ) {
             const prompt = wsQ.question || wsQ.prompt || "";
             const id = wsQ.question_id || wsQ.id || prompt;
@@ -157,6 +156,11 @@ export default function Join() {
                 genre: wsQ.genre || undefined,
                 difficulty,
             });
+            return;
+        }
+        // If no WS question yet, fall back to REST once the game is started
+        if (!hasStarted) {
+            setQuestion(null);
             return;
         }
         // Fallback: REST fetch if WS not available
@@ -467,32 +471,17 @@ export default function Join() {
                                 Welcome, {name}!
                             </div>
                             <div className="text-sm text-stone-400 mb-4">
-                                {!hasStarted &&
-                                    "Waiting for host to start the game..."}
-                                {hasStarted &&
-                                    question &&
-                                    `Question ${
-                                        gameStatus.current_question_index + 1
-                                    }/${gameStatus.total_questions}`}
-                                {hasStarted &&
-                                    !question &&
-                                    "Waiting for next question..."}
+                                {question
+                                    ? `Question ${
+                                          (gameStatus.current_question_index ||
+                                              0) + 1
+                                      }/${gameStatus.total_questions}`
+                                    : !hasStarted
+                                    ? "Waiting for host to start the game..."
+                                    : "Waiting for next question..."}
                             </div>
 
-                            {!hasStarted ? (
-                                <div className="text-center py-12">
-                                    <div className="text-4xl mb-4">🕒</div>
-                                    <div className="text-stone-300 font-medium">
-                                        You're in! Waiting for the host to
-                                        start.
-                                    </div>
-                                    <div className="text-xs text-stone-500 mt-2">
-                                        {isConnected
-                                            ? "Connected for real-time updates"
-                                            : "Connecting..."}
-                                    </div>
-                                </div>
-                            ) : question ? (
+                            {question ? (
                                 <div className="space-y-4">
                                     <div className="p-4 bg-ink-800 rounded-xl">
                                         <div className="text-lg font-medium mb-4">
@@ -552,6 +541,19 @@ export default function Join() {
                                             </LoadingButton>
                                         </div>
                                     )}
+                                </div>
+                            ) : !hasStarted ? (
+                                <div className="text-center py-12">
+                                    <div className="text-4xl mb-4">🕒</div>
+                                    <div className="text-stone-300 font-medium">
+                                        You're in! Waiting for the host to
+                                        start.
+                                    </div>
+                                    <div className="text-xs text-stone-500 mt-2">
+                                        {isConnected
+                                            ? "Connected for real-time updates"
+                                            : "Connecting..."}
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="text-center py-8">

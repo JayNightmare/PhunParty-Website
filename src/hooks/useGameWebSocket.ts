@@ -330,17 +330,28 @@ export const useGameWebSocket = (
                             connected_at: message.data.timestamp,
                         };
 
-                        setGameState((prev) =>
-                            prev
-                                ? {
-                                      ...prev,
-                                      connectedPlayers: [
-                                          ...prev.connectedPlayers,
-                                          player,
-                                      ],
-                                  }
-                                : null
-                        );
+                        setGameState((prev) => {
+                            const base: GameState =
+                                prev ||
+                                ({
+                                    sessionCode,
+                                    gameType: "trivia",
+                                    isActive: false,
+                                    currentQuestion: null,
+                                    connectedPlayers: [],
+                                    gameStats: null,
+                                } as GameState);
+                            // Avoid duplicates by player_id
+                            const exists = base.connectedPlayers.some(
+                                (p) => p.player_id === player.player_id
+                            );
+                            return {
+                                ...base,
+                                connectedPlayers: exists
+                                    ? base.connectedPlayers
+                                    : [...base.connectedPlayers, player],
+                            };
+                        });
 
                         onPlayerJoined?.(player);
                     }
@@ -348,19 +359,25 @@ export const useGameWebSocket = (
 
                 case "player_left":
                     if (message.data) {
-                        setGameState((prev) =>
-                            prev
-                                ? {
-                                      ...prev,
-                                      connectedPlayers:
-                                          prev.connectedPlayers.filter(
-                                              (p) =>
-                                                  p.player_id !==
-                                                  message.data.player_id
-                                          ),
-                                  }
-                                : null
-                        );
+                        setGameState((prev) => {
+                            const base: GameState =
+                                prev ||
+                                ({
+                                    sessionCode,
+                                    gameType: "trivia",
+                                    isActive: false,
+                                    currentQuestion: null,
+                                    connectedPlayers: [],
+                                    gameStats: null,
+                                } as GameState);
+                            return {
+                                ...base,
+                                connectedPlayers: base.connectedPlayers.filter(
+                                    (p) =>
+                                        p.player_id !== message.data.player_id
+                                ),
+                            };
+                        });
 
                         onPlayerLeft?.(message.data.player_id);
                     }
