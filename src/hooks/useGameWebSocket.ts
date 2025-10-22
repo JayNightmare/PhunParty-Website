@@ -148,6 +148,35 @@ export const useGameWebSocket = (
             };
 
             switch (message.type) {
+                case "new_question": {
+                    // New question broadcast with shape: { question_id, question, difficulty, display_options, correct_index, ... }
+                    const q = message.data || {};
+                    setGameState((prev) => {
+                        const base: GameState =
+                            prev ||
+                            ({
+                                sessionCode,
+                                gameType: "trivia",
+                                isActive: true,
+                                currentQuestion: null,
+                                connectedPlayers: [],
+                                gameStats: null,
+                            } as GameState);
+                        return {
+                            ...base,
+                            isActive: true,
+                            currentQuestion: q,
+                            connectedPlayers: base.connectedPlayers.map(
+                                (p) => ({
+                                    ...p,
+                                    answered_current: false,
+                                })
+                            ),
+                        };
+                    });
+                    onQuestionStarted?.(message.data);
+                    break;
+                }
                 // New broadcast messages for questions/answers
                 case "qa_question": {
                     setGameState((prev) => {

@@ -31,6 +31,7 @@ export type WebSocketMessageType =
     | "end_game"
     | "get_session_stats"
     | "error"
+    | "new_question"
     // New broadcast channel message types for Q&A
     | "qa_update"
     | "qa_question"

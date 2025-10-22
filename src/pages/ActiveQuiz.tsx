@@ -46,6 +46,7 @@ export default function ActiveQuiz() {
     // Use the new real-time game updates hook
     const {
         gameStatus,
+        gameState: wsGameState,
         isConnected,
         isLoading: loading,
         error,
@@ -163,9 +164,15 @@ export default function ActiveQuiz() {
                     if (sessionId) {
                         // Start game after tutorial intro completes
                         await startGameApi({ session_code: sessionId });
+                        // Optimistically set state to active while waiting for server update
+                        setGameState("active");
+                        // Pull latest status
+                        await refetch();
+                        // Advance to the first question
+                        await handleNextQuestion();
                     }
                 } catch (e) {
-                    console.warn("Failed to send isstarted flag", e);
+                    console.warn("Failed to start game after intro", e);
                 } finally {
                     setIntroMode(false);
                 }
@@ -215,52 +222,78 @@ export default function ActiveQuiz() {
             setGameState(gameStatus.current_question ? "active" : "waiting");
         }
 
-        // Fetch current question for the session using getCurrentQuestion
-        const fetchCurrentQuestion = async () => {
-            if (!sessionId || !gameStatus?.isstarted) {
-                console.warn(
-                    "Session ID or game not started, cannot fetch question"
-                );
-                console.warn(
-                    `sessionId: ${sessionId}, isstarted: ${gameStatus?.isstarted}`
-                );
-                setQuestion(null);
-                return;
-            }
+        // Prefer WebSocket currentQuestion when available
+        const wsQ = (wsGameState as any)?.currentQuestion;
+        if (wsQ && gameStatus?.isstarted) {
+            const prompt = wsQ.question || wsQ.prompt || "";
+            const id = wsQ.question_id || wsQ.id || prompt;
+            const displayOptions: string[] =
+                wsQ.display_options || wsQ.options || [];
+            const mcqOptions: MCQOption[] = Array.isArray(displayOptions)
+                ? displayOptions.map((opt: string, i: number) => ({
+                      id: `option_${i}`,
+                      text: opt,
+                  }))
+                : [];
+            const rawDiff: string = wsQ.difficulty || "Easy";
+            const difficulty = (
+                rawDiff
+                    ? rawDiff.charAt(0).toUpperCase() +
+                      rawDiff.slice(1).toLowerCase()
+                    : "Easy"
+            ) as Question["difficulty"];
+            const correctIndex: number | undefined = wsQ.correct_index;
+            const answerText =
+                typeof correctIndex === "number" &&
+                Array.isArray(displayOptions)
+                    ? displayOptions[correctIndex] ?? ""
+                    : wsQ.answer || "";
 
-            try {
-                // Get current question for the session directly
-                const currentQuestion = await getCurrentQuestion(sessionId);
-
-                if (currentQuestion) {
-                    // Convert string options to MCQOption format
-                    const mcqOptions =
-                        currentQuestion.options?.map((option, index) => ({
-                            id: `option_${index}`,
-                            text: option,
-                        })) || [];
-
-                    setQuestion({
-                        id: currentQuestion.id,
-                        type: mcqOptions.length > 0 ? "mcq" : "free",
-                        prompt: currentQuestion.prompt || "",
-                        options: mcqOptions,
-                        answer: currentQuestion.answer || "",
-                        genre: currentQuestion.genre || undefined,
-                        difficulty:
-                            (currentQuestion.difficulty as Question["difficulty"]) ||
-                            undefined,
-                    });
-                } else {
+            setQuestion({
+                id,
+                type: difficulty === "Hard" ? "free" : "mcq",
+                prompt,
+                options: difficulty === "Hard" ? undefined : mcqOptions,
+                answer: answerText,
+                genre: wsQ.genre || undefined,
+                difficulty,
+            });
+        } else {
+            // Fallback to fetching current question via REST
+            const fetchCurrentQuestion = async () => {
+                if (!sessionId || !gameStatus?.isstarted) {
+                    setQuestion(null);
+                    return;
+                }
+                try {
+                    const currentQuestion = await getCurrentQuestion(sessionId);
+                    if (currentQuestion) {
+                        const mcqOptions =
+                            currentQuestion.options?.map((option, index) => ({
+                                id: `option_${index}`,
+                                text: option,
+                            })) || [];
+                        setQuestion({
+                            id: currentQuestion.id,
+                            type: mcqOptions.length > 0 ? "mcq" : "free",
+                            prompt: currentQuestion.prompt || "",
+                            options: mcqOptions,
+                            answer: currentQuestion.answer || "",
+                            genre: currentQuestion.genre || undefined,
+                            difficulty:
+                                (currentQuestion.difficulty as Question["difficulty"]) ||
+                                undefined,
+                        });
+                    } else {
+                        setQuestion(null);
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch current question:", error);
                     setQuestion(null);
                 }
-            } catch (error) {
-                console.error("Failed to fetch current question:", error);
-                setQuestion(null);
-            }
-        };
-
-        fetchCurrentQuestion();
+            };
+            fetchCurrentQuestion();
+        }
 
         // Extract players from the status
         if (gameStatus.players) {
@@ -292,7 +325,7 @@ export default function ActiveQuiz() {
             }
             setPlayers(playerList);
         }
-    }, [gameStatus]);
+    }, [gameStatus, wsGameState]);
 
     // Automatically navigate to stats page when the game completes
     useEffect(() => {
@@ -422,7 +455,16 @@ export default function ActiveQuiz() {
             </main>
         );
 
+    // Timer duration based on difficulty
+    const [timerMs, setTimerMs] = useState<number>(30000);
     const keyer = `${sessionId}-${question?.id}`;
+    useEffect(() => {
+        const diff = (question?.difficulty || "Easy") as any;
+        const norm = typeof diff === "string" ? diff.toLowerCase() : "easy";
+        if (norm === "hard") setTimerMs(15000);
+        else if (norm === "medium") setTimerMs(20000);
+        else setTimerMs(30000);
+    }, [question?.difficulty]);
     const playersAnswered = players.filter((p) => p.answeredCurrent).length;
 
     // Intro screen overlay
@@ -509,7 +551,7 @@ export default function ActiveQuiz() {
                             />
                         </div>
 
-                        <Timer ms={30000} keyer={keyer} onEnd={next} />
+                        <Timer ms={timerMs} keyer={keyer} onEnd={next} />
                     </div>
                 </div>
 

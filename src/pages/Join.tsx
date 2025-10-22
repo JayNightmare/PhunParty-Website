@@ -52,6 +52,7 @@ export default function Join() {
 
     const {
         gameStatus,
+        gameState,
         isConnected,
         isLoading: statusLoading,
         error: statusError,
@@ -116,12 +117,51 @@ export default function Join() {
     const hasStarted = !!gameStatus?.isstarted;
 
     useEffect(() => {
+        // Prefer WebSocket question for real-time updates once started
+        const wsQ = (gameState as any)?.currentQuestion;
+        if (!hasStarted) {
+            setQuestion(null);
+            return;
+        }
+        if (wsQ) {
+            const prompt = wsQ.question || wsQ.prompt || "";
+            const id = wsQ.question_id || wsQ.id || prompt;
+            const displayOptions: string[] =
+                wsQ.display_options || wsQ.options || [];
+            const mcqOptions = Array.isArray(displayOptions)
+                ? displayOptions.map((opt: string, i: number) => ({
+                      id: `option_${i}`,
+                      text: opt,
+                  }))
+                : [];
+            const rawDiff: string = wsQ.difficulty || "Easy";
+            const difficulty = (
+                rawDiff
+                    ? rawDiff.charAt(0).toUpperCase() +
+                      rawDiff.slice(1).toLowerCase()
+                    : "Easy"
+            ) as Question["difficulty"];
+            const correctIndex: number | undefined = wsQ.correct_index;
+            const answerText =
+                typeof correctIndex === "number" &&
+                Array.isArray(displayOptions)
+                    ? displayOptions[correctIndex] ?? ""
+                    : wsQ.answer || "";
+
+            setQuestion({
+                id,
+                type: difficulty === "Hard" ? "free" : "mcq",
+                prompt,
+                options: difficulty === "Hard" ? undefined : mcqOptions,
+                answer: answerText,
+                genre: wsQ.genre || undefined,
+                difficulty,
+            });
+            return;
+        }
+        // Fallback: REST fetch if WS not available
         const fetchCurrentQuestion = async () => {
-            if (!sessionId || !hasStarted) {
-                // Clear any stale question if we reverted to waiting state
-                if (!hasStarted) setQuestion(null);
-                return;
-            }
+            if (!sessionId) return;
             try {
                 const currentQuestion = await getCurrentQuestion(sessionId);
                 if (currentQuestion) {
@@ -149,13 +189,8 @@ export default function Join() {
                 setQuestion(null);
             }
         };
-        // Trigger fetch when game starts or question index changes
-        if (hasStarted) {
-            fetchCurrentQuestion();
-        } else {
-            setQuestion(null);
-        }
-    }, [sessionId, hasStarted, gameStatus?.current_question_index]);
+        fetchCurrentQuestion();
+    }, [sessionId, hasStarted, gameStatus?.current_question_index, gameState]);
 
     // Load stored player ID and name if available
     useEffect(() => {
