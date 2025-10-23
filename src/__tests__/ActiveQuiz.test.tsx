@@ -129,8 +129,8 @@ const baseGameStatus: GameStatusResponse = {
 const createGameUpdatesReturn = (
     overrides: Partial<UseGameUpdatesReturn> = {}
 ): UseGameUpdatesReturn => ({
-    gameStatus: { ...baseGameStatus },
-    gameState: null,
+    game_status: { ...baseGameStatus },
+    game_state: null,
     isConnected: true,
     isLoading: false,
     error: null,
@@ -155,9 +155,9 @@ describe("ActiveQuiz navigation", () => {
     it("navigates to stats when the game is completed", async () => {
         mockUseGameUpdates.mockReturnValue(
             createGameUpdatesReturn({
-                gameStatus: {
+                game_status: {
                     ...baseGameStatus,
-                    game_state: "completed" as const,
+                    game_state: "ended" as const,
                 },
             })
         );
@@ -174,7 +174,7 @@ describe("ActiveQuiz navigation", () => {
     it("does not navigate when the game remains active", async () => {
         mockUseGameUpdates.mockReturnValue(
             createGameUpdatesReturn({
-                gameStatus: {
+                game_status: {
                     ...baseGameStatus,
                     game_state: "active" as const,
                 },

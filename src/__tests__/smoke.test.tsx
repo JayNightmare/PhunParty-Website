@@ -25,7 +25,7 @@ vi.mock("@/lib/api", () => ({
 // Keep WS/polling quiet in tests
 vi.mock("@/hooks/useGameUpdates", () => ({
     __esModule: true,
-    default: () => ({ gameStatus: null, isConnected: true, isLoading: false }),
+    default: () => ({ game_status: null, isConnected: true, isLoading: false }),
 }));
 
 import Landing from "@/pages/Landing";

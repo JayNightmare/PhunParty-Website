@@ -31,7 +31,7 @@ export default function ActiveQuiz() {
     const navigate = useNavigate();
     const [question, setQuestion] = useState<Question | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
-    const [gameState, setGameState] = useState<
+    const [game_state, setGameState] = useState<
         "waiting" | "active" | "paused" | "ended"
     >("waiting");
     const { success, error: showError } = useToast();
@@ -47,7 +47,7 @@ export default function ActiveQuiz() {
 
     // Use the new real-time game updates hook
     const {
-        game_status: gameStatus,
+        game_status: game_status,
         game_state: wsGameState,
         isConnected,
         isLoading: loading,
@@ -81,11 +81,11 @@ export default function ActiveQuiz() {
     } = useTouchGestures({
         onSwipeLeft: async () => {
             if (
-                gameStatus &&
+                game_status &&
                 sessionId &&
-                typeof gameStatus.current_question_index === "number" &&
-                gameStatus.current_question_index <
-                    (gameStatus.total_questions || 1) - 1
+                typeof game_status.current_question_index === "number" &&
+                game_status.current_question_index <
+                    (game_status.total_questions || 1) - 1
             ) {
                 try {
                     await nextQuestion({ session_code: sessionId });
@@ -97,10 +97,10 @@ export default function ActiveQuiz() {
         },
         onSwipeRight: async () => {
             if (
-                gameStatus &&
+                game_status &&
                 sessionId &&
-                typeof gameStatus.current_question_index === "number" &&
-                gameStatus.current_question_index > 0
+                typeof game_status.current_question_index === "number" &&
+                game_status.current_question_index > 0
             ) {
                 try {
                     await previousQuestion({ session_code: sessionId });
@@ -202,7 +202,7 @@ export default function ActiveQuiz() {
 
     // Process game status updates
     useEffect(() => {
-        if (!gameStatus) return;
+        if (!game_status) return;
 
         // Determine game state
         if (introMode) {
@@ -213,9 +213,9 @@ export default function ActiveQuiz() {
             } else {
                 setGameState("waiting");
             }
-        } else if (gameStatus.game_state) {
+        } else if (game_status.game_state) {
             // Map API state to component state
-            switch (gameStatus.game_state) {
+            switch (game_status.game_state) {
                 case "active":
                     setGameState("active");
                     break;
@@ -230,12 +230,12 @@ export default function ActiveQuiz() {
             }
         } else {
             // Default to active if no explicit state but a current question exists
-            setGameState(gameStatus.current_question ? "active" : "waiting");
+            setGameState(game_status.current_question ? "active" : "waiting");
         }
 
         // Prefer WebSocket currentQuestion when available
         const wsQ = (wsGameState as any)?.currentQuestion;
-        if (wsQ && gameStatus?.isstarted) {
+        if (wsQ && game_status?.isstarted) {
             const prompt = wsQ.question || wsQ.prompt || "";
             const id = wsQ.question_id || wsQ.id || prompt;
             const displayOptions: string[] =
@@ -272,7 +272,7 @@ export default function ActiveQuiz() {
         } else {
             // Fallback to fetching current question via REST
             const fetchCurrentQuestion = async () => {
-                if (!sessionId || !gameStatus?.isstarted) {
+                if (!sessionId || !game_status?.isstarted) {
                     setQuestion(null);
                     return;
                 }
@@ -307,10 +307,10 @@ export default function ActiveQuiz() {
         }
 
         // Extract players from the status
-        if (gameStatus.players) {
+        if (game_status.players) {
             const playerList: Player[] = [];
-            if (Array.isArray(gameStatus.players)) {
-                gameStatus.players.forEach((player: any) => {
+            if (Array.isArray(game_status.players)) {
+                game_status.players.forEach((player: any) => {
                     playerList.push({
                         id: player.player_id || player.id,
                         name: player.player_name || player.name,
@@ -319,9 +319,9 @@ export default function ActiveQuiz() {
                         score: player.score || 0,
                     });
                 });
-            } else if (typeof gameStatus.players === "object") {
+            } else if (typeof game_status.players === "object") {
                 // Handle object format: {total: number, list: array}
-                const playersObj = gameStatus.players as any;
+                const playersObj = game_status.players as any;
                 if (playersObj.list && Array.isArray(playersObj.list)) {
                     playersObj.list.forEach((player: any) => {
                         playerList.push({
@@ -336,31 +336,21 @@ export default function ActiveQuiz() {
             }
             setPlayers(playerList);
         }
-    }, [gameStatus, wsGameState]);
+    }, [game_status, wsGameState]);
 
     // Automatically navigate to stats page when the game completes
     useEffect(() => {
         if (!sessionId) return;
-        console.log("Game state changed:", gameStatus?.game_state);
-
-        const max_questions = gameStatus?.total_questions || 0;
-
-        // End game when the game state is "ended" or when the max questions reached
-        if (gameStatus?.game_state === "ended" || max_questions) {
-            console.log("Navigating to stats page for session", sessionId);
+        // Only navigate when the server reports the game has ended
+        if (game_status?.game_state === "ended") {
             if (!hasNavigatedToStats.current) {
                 hasNavigatedToStats.current = true;
-                handleEndGame();
                 navigate(`/stats/${sessionId}/`, { replace: true });
             }
         } else {
-            console.log(
-                "Game not ended, current state:",
-                gameStatus?.game_state
-            );
             hasNavigatedToStats.current = false;
         }
-    }, [gameStatus?.game_state, navigate, sessionId]);
+    }, [game_status?.game_state, navigate, sessionId]);
 
     // Game Control Handlers
     const handlePause = async () => {
@@ -447,7 +437,7 @@ export default function ActiveQuiz() {
         await handleNextQuestion();
     };
 
-    if (!gameStatus && loading && !introMode) {
+    if (!game_status && loading && !introMode) {
         return (
             <main className="max-w-6xl mx-auto px-4 py-8">
                 <Card className="p-6">
@@ -457,7 +447,7 @@ export default function ActiveQuiz() {
         );
     }
 
-    if (!gameStatus && !introMode)
+    if (!game_status && !introMode)
         return (
             <main className="max-w-6xl mx-auto px-4 py-8">
                 <Card className="p-6">
@@ -541,13 +531,15 @@ export default function ActiveQuiz() {
                 {/* Game State and Controls */}
                 <div className="grid md:grid-cols-2 gap-4">
                     <GameStateIndicator
-                        gameState={gameState === "ended" ? "ended" : gameState}
+                        game_state={
+                            game_state === "ended" ? "ended" : game_state
+                        }
                         currentQuestion={
-                            gameStatus?.current_question_index
-                                ? gameStatus.current_question_index + 1
+                            game_status?.current_question_index
+                                ? game_status.current_question_index + 1
                                 : undefined
                         }
-                        totalQuestions={gameStatus?.total_questions}
+                        totalQuestions={game_status?.total_questions}
                         playersCount={players.length}
                         playersAnswered={playersAnswered}
                     />
@@ -568,15 +560,15 @@ export default function ActiveQuiz() {
 
                 {/* Game Controls */}
                 <GameControls
-                    isPaused={gameState === "paused"}
+                    isPaused={game_state === "paused"}
                     canGoNext={
-                        gameState === "active" &&
-                        (gameStatus?.current_question_index || 0) <
-                            (gameStatus?.total_questions || 1) - 1
+                        game_state === "active" &&
+                        (game_status?.current_question_index || 0) <
+                            (game_status?.total_questions || 1) - 1
                     }
                     canGoPrevious={
-                        gameState === "active" &&
-                        (gameStatus?.current_question_index || 0) > 0
+                        game_state === "active" &&
+                        (game_status?.current_question_index || 0) > 0
                     }
                     isLoading={loading}
                     onPause={handlePause}
@@ -584,10 +576,10 @@ export default function ActiveQuiz() {
                     onNextQuestion={handleNextQuestion}
                     onPreviousQuestion={handlePreviousQuestion}
                     onEndGame={handleEndGame}
-                    totalQuestions={gameStatus?.total_questions}
+                    totalQuestions={game_status?.total_questions}
                     currentQuestion={
-                        gameStatus?.current_question_index
-                            ? gameStatus.current_question_index + 1
+                        game_status?.current_question_index
+                            ? game_status.current_question_index + 1
                             : undefined
                     }
                 />
@@ -599,9 +591,9 @@ export default function ActiveQuiz() {
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-xl font-semibold">
                                     Question{" "}
-                                    {(gameStatus?.current_question_index ?? 0) +
-                                        1}{" "}
-                                    of {gameStatus?.total_questions || 0}
+                                    {(game_status?.current_question_index ??
+                                        0) + 1}{" "}
+                                    of {game_status?.total_questions || 0}
                                 </h2>
                             </div>
 

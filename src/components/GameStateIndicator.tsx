@@ -1,7 +1,7 @@
 import React from "react";
 
 interface GameStateIndicatorProps {
-    gameState: "waiting" | "active" | "paused" | "ended";
+    game_state: "waiting" | "active" | "paused" | "ended";
     currentQuestion?: number;
     totalQuestions?: number;
     playersCount?: number;
@@ -9,14 +9,14 @@ interface GameStateIndicatorProps {
 }
 
 export default function GameStateIndicator({
-    gameState,
+    game_state,
     currentQuestion,
     totalQuestions,
     playersCount = 0,
     playersAnswered = 0,
 }: GameStateIndicatorProps) {
     const getStateColor = () => {
-        switch (gameState) {
+        switch (game_state) {
             case "waiting":
                 return "bg-blue-900/30 border-blue-500/30 text-blue-200";
             case "active":
@@ -31,7 +31,7 @@ export default function GameStateIndicator({
     };
 
     const getStateIcon = () => {
-        switch (gameState) {
+        switch (game_state) {
             case "waiting":
                 return "🟡";
             case "active":
@@ -46,7 +46,7 @@ export default function GameStateIndicator({
     };
 
     const getStateText = () => {
-        switch (gameState) {
+        switch (game_state) {
             case "waiting":
                 return "Waiting to Start";
             case "active":
@@ -105,7 +105,7 @@ export default function GameStateIndicator({
             )}
 
             {/* Player Response Progress */}
-            {gameState === "active" && playersCount > 0 && (
+            {game_state === "active" && playersCount > 0 && (
                 <div>
                     <div className="flex items-center justify-between text-xs mb-1">
                         <span>Players Answered</span>
@@ -128,13 +128,13 @@ export default function GameStateIndicator({
             )}
 
             {/* Additional State Info */}
-            {gameState === "paused" && (
+            {game_state === "paused" && (
                 <div className="text-xs mt-2 opacity-75">
                     Timer paused • Players cannot submit answers
                 </div>
             )}
 
-            {gameState === "waiting" && (
+            {game_state === "waiting" && (
                 <div className="text-xs mt-2 opacity-75">
                     Ready to begin • {playersCount} players connected
                 </div>

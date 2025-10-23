@@ -16,7 +16,7 @@ export default function SessionWaitingRoom() {
     const [isStarting, setIsStarting] = useState(false);
 
     const {
-        gameStatus,
+        game_status,
         isConnected,
         connectedPlayers,
         startGame: wsStartGame,
@@ -28,7 +28,7 @@ export default function SessionWaitingRoom() {
 
     // We intentionally do NOT auto-redirect anymore so the host can wait even if backend marks session active.
 
-    if (!gameStatus) {
+    if (!game_status) {
         return (
             <main className="max-w-4xl mx-auto px-4 py-8">
                 <Card className="p-6">
@@ -105,7 +105,7 @@ export default function SessionWaitingRoom() {
                                 {joinUrl}
                             </div>
                         </div>
-                        {gameStatus.game_state === "active" ? (
+                        {game_status.game_state === "active" ? (
                             <div className="space-y-3">
                                 <div className="p-3 bg-ink-800 rounded-xl text-sm text-tea-400 border border-tea-500/20">
                                     Game already marked active. You can enter

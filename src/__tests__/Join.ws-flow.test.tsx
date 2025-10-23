@@ -76,7 +76,7 @@ function makeUseGameUpdatesReturn(
     overrides: Partial<UseGameUpdatesReturn>
 ): UseGameUpdatesReturn {
     return {
-        gameStatus: {
+        game_status: {
             session_code: "ROOM123",
             game_state: "active",
             isstarted: false,
@@ -88,7 +88,7 @@ function makeUseGameUpdatesReturn(
             started_at: null,
             ended_at: null,
         },
-        gameState: null,
+        game_state: null,
         isConnected: true,
         isLoading: false,
         error: null,
@@ -122,7 +122,7 @@ describe("Join page WS-first flows", () => {
         mockUseGameUpdates.mockReturnValue(
             makeUseGameUpdatesReturn({
                 // REST still says not started
-                gameStatus: {
+                game_status: {
                     session_code: "ROOM123",
                     game_state: "active",
                     isstarted: false,
@@ -139,7 +139,7 @@ describe("Join page WS-first flows", () => {
                     ended_at: null,
                 },
                 // WS provides the current question
-                gameState: {
+                game_state: {
                     sessionCode: "ROOM123",
                     gameType: "trivia",
                     isActive: true,
@@ -151,7 +151,7 @@ describe("Join page WS-first flows", () => {
                         correct_index: 1,
                     },
                     connectedPlayers: [],
-                    gameStats: null,
+                    game_state: null,
                 },
             })
         );
@@ -176,7 +176,7 @@ describe("Join page WS-first flows", () => {
         // No WS question
         mockUseGameUpdates.mockReturnValue(
             makeUseGameUpdatesReturn({
-                gameStatus: {
+                game_status: {
                     session_code: "ROOM123",
                     game_state: "active",
                     isstarted: true,
@@ -192,7 +192,7 @@ describe("Join page WS-first flows", () => {
                     started_at: null,
                     ended_at: null,
                 },
-                gameState: null,
+                game_state: null,
             })
         );
 

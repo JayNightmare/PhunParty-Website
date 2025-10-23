@@ -51,8 +51,8 @@ export default function Join() {
     const isJoined = !!myId && nameTrigger;
 
     const {
-        gameStatus,
-        gameState,
+        game_status,
+        game_state,
         isConnected,
         isLoading: statusLoading,
         error: statusError,
@@ -114,14 +114,14 @@ export default function Join() {
 
     // Only fetch question data AFTER the game has actually started
     // Game truly started only when backend sets isstarted flag
-    const hasStarted = !!gameStatus?.isstarted;
+    const hasStarted = !!game_status?.isstarted;
 
     useEffect(() => {
         // Prefer WebSocket question for real-time updates.
         // Important: don't gate WS updates behind `hasStarted`.
         // The WS can deliver a question slightly before REST `isstarted` flips,
         // which would otherwise hide the question from users.
-        const wsQ = (gameState as any)?.currentQuestion;
+        const wsQ = (game_state as any)?.currentQuestion;
         if (wsQ) {
             const prompt = wsQ.question || wsQ.prompt || "";
             const id = wsQ.question_id || wsQ.id || prompt;
@@ -194,7 +194,12 @@ export default function Join() {
             }
         };
         fetchCurrentQuestion();
-    }, [sessionId, hasStarted, gameStatus?.current_question_index, gameState]);
+    }, [
+        sessionId,
+        hasStarted,
+        game_status?.current_question_index,
+        game_state,
+    ]);
 
     // Load stored player ID and name if available
     useEffect(() => {
@@ -332,7 +337,7 @@ export default function Join() {
     };
 
     // Loading state
-    if (statusLoading && !gameStatus) {
+    if (statusLoading && !game_status) {
         return (
             <main className="max-w-md mx-auto px-4 py-8">
                 <Card className="p-6">
@@ -343,7 +348,7 @@ export default function Join() {
     }
 
     // Error state
-    if (statusError && !gameStatus) {
+    if (statusError && !game_status) {
         return (
             <main className="max-w-md mx-auto px-4 py-8">
                 <Card className="p-6">
@@ -362,7 +367,7 @@ export default function Join() {
         );
     }
 
-    if (!gameStatus) {
+    if (!game_status) {
         return (
             <main className="max-w-md mx-auto px-4 py-8">
                 <Card className="p-6">
@@ -409,8 +414,8 @@ export default function Join() {
                                 Join Game
                             </div>
                             <div className="text-sm text-stone-400 mb-6">
-                                State: {gameStatus.game_state} • Players:{" "}
-                                {gameStatus.players?.length || 0}
+                                State: {game_status.game_state} • Players:{" "}
+                                {game_status.players?.length || 0}
                             </div>
 
                             <div className="space-y-4">
@@ -473,9 +478,9 @@ export default function Join() {
                             <div className="text-sm text-stone-400 mb-4">
                                 {question
                                     ? `Question ${
-                                          (gameStatus.current_question_index ||
+                                          (game_status.current_question_index ||
                                               0) + 1
-                                      }/${gameStatus.total_questions}`
+                                      }/${game_status.total_questions}`
                                     : !hasStarted
                                     ? "Waiting for host to start the game..."
                                     : "Waiting for next question..."}

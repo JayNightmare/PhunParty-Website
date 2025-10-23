@@ -49,7 +49,7 @@ export default function ActiveSessions() {
 
     // Use real-time updates for the focused session
     const {
-        gameStatus: realTimeStatus,
+        game_status: realTimeStatus,
         isConnected,
         isLoading: statusLoading,
     } = useGameUpdates({
