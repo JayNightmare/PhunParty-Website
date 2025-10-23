@@ -343,7 +343,10 @@ export default function ActiveQuiz() {
         if (!sessionId) return;
         console.log("Game state changed:", gameStatus?.game_state);
 
-        if (gameStatus?.game_state === "ended") {
+        const max_questions = gameStatus?.total_questions || 0;
+
+        // End game when the game state is "ended" or when the max questions reached
+        if (gameStatus?.game_state === "ended" || max_questions) {
             console.log("Navigating to stats page for session", sessionId);
             if (!hasNavigatedToStats.current) {
                 hasNavigatedToStats.current = true;
@@ -428,6 +431,7 @@ export default function ActiveQuiz() {
             // } else {
             const response = await endGame({ session_code: sessionId });
             if (response.success) {
+                setGameState("ended");
                 success("Game ended successfully");
                 await refetch();
                 navigate(`/stats/${sessionId}/`);
