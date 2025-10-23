@@ -1,7 +1,12 @@
 import Card from "@/components/Card";
 import { Link, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getGames, GameResponse, testApiConnection } from "@/lib/api";
+import {
+    getGames,
+    GameResponse,
+    testApiConnection,
+    GameHistory,
+} from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProfileSkeleton, GameListSkeleton } from "@/components/Skeleton";
 import { LoadingState } from "@/components/Loading";
@@ -10,7 +15,7 @@ import { useToast } from "@/contexts/ToastContext";
 export default function Account() {
     const { user, isLoading: authLoading } = useAuth();
     const { showError } = useToast();
-    const [games, setGames] = useState<GameResponse[]>([]);
+    const [games, setGames] = useState<GameHistory[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [testResult, setTestResult] = useState<string | null>(null);
@@ -159,13 +164,16 @@ export default function Account() {
                             games.length > 0 &&
                             games.map((g) => (
                                 <Link
-                                    to={`/stats/${g.code}`}
-                                    key={g.code}
+                                    to={`/stats/${g.session_code}`}
+                                    key={g.session_code}
                                     className="block px-3 py-2 bg-ink-700 rounded-xl hover:bg-ink-600 transition-colors"
                                 >
-                                    <div className="font-medium">{g.name}</div>
+                                    <div className="font-medium">
+                                        {g.game_type}
+                                    </div>
                                     <div className="text-xs text-stone-400">
-                                        Code: {g.code} • Status: {g.status}
+                                        Code: {g.session_code} • Status:{" "}
+                                        {g.did_win ? "Won" : "Lost"}
                                     </div>
                                 </Link>
                             ))}

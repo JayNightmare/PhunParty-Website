@@ -248,6 +248,12 @@ export interface GameResponse {
     status: string;
 }
 
+export interface GameHistory {
+    session_code: string;
+    game_type: string;
+    did_win: boolean;
+}
+
 export interface IsStartedResponse {
     isstarted: boolean;
 }
@@ -301,6 +307,12 @@ type BackendGame = {
     genre: string;
     rules: string;
     message?: string;
+};
+
+type BackendGameHistory = {
+    session_code: string;
+    game_type: string;
+    did_win: boolean;
 };
 
 type BackendGameSession = {
@@ -368,6 +380,12 @@ const mapGame = (raw: BackendGame): GameResponse => ({
     code: raw.game_code,
     name: raw.genre,
     status: raw.rules,
+});
+
+const mapHistory = (raw: BackendGameHistory): GameHistory => ({
+    session_code: raw.session_code,
+    game_type: raw.game_type,
+    did_win: raw.did_win,
 });
 
 const mapSession = (raw: BackendGameSession): GameResponse => ({
@@ -724,19 +742,20 @@ export async function getGameSession(game_code: string): Promise<GameResponse> {
     return mapGame(raw);
 }
 
-export async function getGames(): Promise<GameResponse[]> {
-    const raw = await apiFetch<BackendGame[]>("/game/");
-    return raw.map(mapGame);
+// ! Wait for Endpoint ! \\
+export async function getGames(): Promise<GameHistory[]> {
+    const raw = await apiFetch<BackendGameHistory[]>("/game/history");
+    return raw.map(mapHistory);
 }
 
 // Get unique game types (genres) from all available games
-export async function getGameTypes(): Promise<string[]> {
-    const games = await getGames();
-    const gameTypes = [
-        ...new Set(games.map((game) => game.name).filter(Boolean)),
-    ];
-    return gameTypes.length > 0 ? gameTypes : ["trivia", "speed-round"]; // fallback
-}
+// export async function getGameTypes(): Promise<string[]> {
+//     const games = await getGames();
+//     const gameTypes = [
+//         ...new Set(games.map((game) => game.name).filter(Boolean)),
+//     ];
+//     return gameTypes.length > 0 ? gameTypes : ["trivia", "speed-round"]; // fallback
+// }
 
 // Get user's created sessions from localStorage
 export async function getOwnedUserSessions(): Promise<GameResponse[]> {
