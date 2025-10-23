@@ -32,6 +32,7 @@ export default function ActiveQuiz() {
     const location = useLocation();
     const navigate = useNavigate();
     const [question, setQuestion] = useState<Question | null>(null);
+    // Local fallback for players; primary source should be WS `connectedPlayers`
     const [players, setPlayers] = useState<Player[]>([]);
     const [game_state, setGameState] = useState<
         "waiting" | "active" | "paused" | "ended"
@@ -310,8 +311,10 @@ export default function ActiveQuiz() {
             fetchCurrentQuestion();
         }
 
-        // Extract players from the status
-        if (game_status.players) {
+        // Prefer WebSocket-connected players; fallback to any list the API provides
+        if (connectedPlayers && connectedPlayers.length > 0) {
+            setPlayers(connectedPlayers);
+        } else if (game_status.players) {
             const playerList: Player[] = [];
             if (Array.isArray(game_status.players)) {
                 game_status.players.forEach((player: any) => {
@@ -338,7 +341,7 @@ export default function ActiveQuiz() {
             }
             setPlayers(playerList);
         }
-    }, [game_status, wsGameState]);
+    }, [game_status, wsGameState, connectedPlayers]);
 
     // Automatically navigate to stats page when the game completes
     useEffect(() => {
@@ -473,6 +476,12 @@ export default function ActiveQuiz() {
 
     const keyer = `${sessionId}-${question?.id}`;
 
+    // Determine which players to display: prefer live WS list
+    const displayPlayers =
+        (connectedPlayers && connectedPlayers.length > 0
+            ? connectedPlayers
+            : players) || [];
+
     // Compute answered players using server-provided counts when available,
     // otherwise fall back to per-player answered flags.
     const playersAnswered =
@@ -545,12 +554,13 @@ export default function ActiveQuiz() {
                             game_state === "ended" ? "ended" : game_state
                         }
                         currentQuestion={
-                            game_status?.current_question_index
+                            typeof game_status?.current_question_index ===
+                            "number"
                                 ? game_status.current_question_index + 1
                                 : undefined
                         }
                         totalQuestions={game_status?.total_questions}
-                        playersCount={players.length}
+                        playersCount={displayPlayers.length}
                         playersAnswered={playersAnswered}
                     />
 
@@ -588,7 +598,7 @@ export default function ActiveQuiz() {
                     onEndGame={handleEndGame}
                     totalQuestions={game_status?.total_questions}
                     currentQuestion={
-                        game_status?.current_question_index
+                        typeof game_status?.current_question_index === "number"
                             ? game_status.current_question_index + 1
                             : undefined
                     }
@@ -639,46 +649,53 @@ export default function ActiveQuiz() {
                         </Card>
                     </section>
 
-                    {/* Player Status */}
+                    {/* Session Leaderboard */}
                     <section>
                         <Card className="p-6">
                             <div className="text-lg font-semibold mb-4 flex items-center justify-between">
-                                <span>Player Status</span>
+                                <span>Leaderboard</span>
                                 <span className="text-sm font-normal text-stone-400">
-                                    {playersAnswered}/{players.length} answered
+                                    {playersAnswered}/{displayPlayers.length}{" "}
+                                    answered
                                 </span>
                             </div>
 
                             <div className="space-y-2 max-h-96 overflow-y-auto">
-                                {players.map((p: Player) => (
-                                    <div
-                                        key={p.player_id}
-                                        className={`flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
-                                            p.player_answered
-                                                ? "bg-green-900/30 border border-green-500/30"
-                                                : "bg-ink-700"
-                                        }`}
-                                    >
-                                        <div className="font-medium">
-                                            {p.player_name}
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div
-                                                className={`text-sm ${
-                                                    p.player_answered
-                                                        ? "text-green-300"
-                                                        : "text-stone-400"
-                                                }`}
-                                            >
-                                                {p.player_answered
-                                                    ? "✓ Answered"
-                                                    : "Thinking..."}
+                                {displayPlayers.map((p: Player) => {
+                                    const hasAnswered =
+                                        (p as any).player_answered ||
+                                        (p as any).answered_current ||
+                                        (p as any).answeredCurrent;
+                                    return (
+                                        <div
+                                            key={p.player_id}
+                                            className={`flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
+                                                hasAnswered
+                                                    ? "bg-green-900/30 border border-green-500/30"
+                                                    : "bg-ink-700"
+                                            }`}
+                                        >
+                                            <div className="font-medium">
+                                                {p.player_name}
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div
+                                                    className={`text-sm ${
+                                                        hasAnswered
+                                                            ? "text-green-300"
+                                                            : "text-stone-400"
+                                                    }`}
+                                                >
+                                                    {hasAnswered
+                                                        ? "✓ Answered"
+                                                        : "Thinking..."}
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
 
-                                {players.length === 0 && (
+                                {displayPlayers.length === 0 && (
                                     <div className="text-stone-400 text-sm text-center py-8">
                                         No players joined yet.
                                     </div>
