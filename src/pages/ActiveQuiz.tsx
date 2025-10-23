@@ -341,14 +341,20 @@ export default function ActiveQuiz() {
     // Automatically navigate to stats page when the game completes
     useEffect(() => {
         if (!sessionId) return;
+        console.log("Game state changed:", gameStatus?.game_state);
 
         if (gameStatus?.game_state === "ended") {
+            console.log("Navigating to stats page for session", sessionId);
             if (!hasNavigatedToStats.current) {
                 hasNavigatedToStats.current = true;
                 handleEndGame();
                 navigate(`/stats/${sessionId}/`, { replace: true });
             }
         } else {
+            console.log(
+                "Game not ended, current state:",
+                gameStatus?.game_state
+            );
             hasNavigatedToStats.current = false;
         }
     }, [gameStatus?.game_state, navigate, sessionId]);
