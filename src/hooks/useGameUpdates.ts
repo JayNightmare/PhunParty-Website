@@ -29,8 +29,8 @@ export interface UseGameUpdatesOptions {
 }
 
 export interface UseGameUpdatesReturn {
-    gameStatus: GameStatusResponse | null;
-    gameState: GameState | null;
+    game_status: GameStatusResponse | null;
+    game_state: GameState | null;
     isConnected: boolean;
     isLoading: boolean;
     error: string | null;
@@ -57,7 +57,7 @@ const useGameUpdates = ({
     playerName,
     playerPhoto,
 }: UseGameUpdatesOptions): UseGameUpdatesReturn => {
-    const [gameStatus, setGameStatus] = useState<GameStatusResponse | null>(
+    const [game_status, setGameStatus] = useState<GameStatusResponse | null>(
         null
     );
     const [isLoading, setIsLoading] = useState(false);
@@ -208,7 +208,7 @@ const useGameUpdates = ({
     // Use the game WebSocket hook
     const {
         isConnected,
-        gameState,
+        game_state,
         startGame,
         nextQuestion,
         endGame,
@@ -235,10 +235,10 @@ const useGameUpdates = ({
 
     // Update connected players from game state
     useEffect(() => {
-        if (gameState?.connectedPlayers) {
-            setConnectedPlayers(gameState.connectedPlayers);
+        if (game_state?.connectedPlayers) {
+            setConnectedPlayers(game_state.connectedPlayers);
         }
-    }, [gameState?.connectedPlayers]);
+    }, [game_state?.connectedPlayers]);
 
     // Fallback polling when WebSocket is not available or not connected
     useEffect(() => {
@@ -286,8 +286,8 @@ const useGameUpdates = ({
     }, []);
 
     return {
-        gameStatus,
-        gameState,
+        game_status,
+        game_state,
         isConnected: enableWebSocket ? isConnected : true, // Always "connected" when using polling
         isLoading,
         error,

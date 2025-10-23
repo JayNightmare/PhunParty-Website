@@ -11,7 +11,7 @@ export interface GameState {
     isActive: boolean;
     currentQuestion: any | null;
     connectedPlayers: Player[];
-    gameStats: any | null;
+    game_state: any | null;
 }
 
 export interface Player {
@@ -44,7 +44,7 @@ export interface UseGameWebSocketReturn {
     // WebSocket connection state
     isConnected: boolean;
     isReconnecting: boolean;
-    gameState: GameState | null;
+    game_state: GameState | null;
 
     // Game actions for web clients
     startGame: () => void;
@@ -103,7 +103,7 @@ export const useGameWebSocket = (
         ...websocketOptions
     } = options;
 
-    const [gameState, setGameState] = useState<GameState | null>(null);
+    const [game_state, setGameState] = useState<GameState | null>(null);
 
     // Build WebSocket URL based on environment
     const buildWebSocketUrl = useCallback(() => {
@@ -160,7 +160,7 @@ export const useGameWebSocket = (
                                 isActive: true,
                                 currentQuestion: null,
                                 connectedPlayers: [],
-                                gameStats: null,
+                                game_state: null,
                             } as GameState);
                         return {
                             ...base,
@@ -190,7 +190,7 @@ export const useGameWebSocket = (
                                 isActive: true,
                                 currentQuestion: normalized,
                                 connectedPlayers: [],
-                                gameStats: null,
+                                game_state: null,
                             };
                         }
                         return {
@@ -251,7 +251,7 @@ export const useGameWebSocket = (
                                 isActive: true,
                                 currentQuestion: null,
                                 connectedPlayers: [],
-                                gameStats: null,
+                                game_state: null,
                             } as GameState);
 
                         // Optionally replace connectedPlayers if provided in broadcast
@@ -273,7 +273,8 @@ export const useGameWebSocket = (
                             currentQuestion:
                                 normalizedQuestion ?? base.currentQuestion,
                             connectedPlayers,
-                            gameStats: data.connection_stats ?? base.gameStats,
+                            game_state:
+                                data.connection_stats ?? base.game_state,
                         };
                     });
                     break;
@@ -289,15 +290,15 @@ export const useGameWebSocket = (
                             isActive: !!data.is_active,
                             currentQuestion: null,
                             connectedPlayers: [],
-                            gameStats: null,
+                            game_state: null,
                         }),
                         isActive: data.is_active ?? prev?.isActive ?? false,
                         currentQuestion:
                             data.current_question ||
                             prev?.currentQuestion ||
                             null,
-                        gameStats:
-                            data.connection_stats ?? prev?.gameStats ?? null,
+                        game_state:
+                            data.connection_stats ?? prev?.game_state ?? null,
                     }));
                     break;
                 }
@@ -316,7 +317,7 @@ export const useGameWebSocket = (
                             currentQuestion: normalizedQuestion,
                             connectedPlayers:
                                 message.data.connected_players || [],
-                            gameStats: message.data.connection_stats || null,
+                            game_state: message.data.connection_stats || null,
                         });
                     }
                     break;
@@ -339,7 +340,7 @@ export const useGameWebSocket = (
                                     isActive: false,
                                     currentQuestion: null,
                                     connectedPlayers: [],
-                                    gameStats: null,
+                                    game_state: null,
                                 } as GameState);
                             // Avoid duplicates by player_id
                             const exists = base.connectedPlayers.some(
@@ -368,7 +369,7 @@ export const useGameWebSocket = (
                                     isActive: false,
                                     currentQuestion: null,
                                     connectedPlayers: [],
-                                    gameStats: null,
+                                    game_state: null,
                                 } as GameState);
                             return {
                                 ...base,
@@ -493,7 +494,7 @@ export const useGameWebSocket = (
                         prev
                             ? {
                                   ...prev,
-                                  gameStats: message.data,
+                                  game_state: message.data,
                               }
                             : null
                     );
@@ -562,7 +563,7 @@ export const useGameWebSocket = (
     return {
         isConnected,
         isReconnecting,
-        gameState,
+        game_state,
         startGame,
         nextQuestion,
         endGame,

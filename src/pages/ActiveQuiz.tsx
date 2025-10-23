@@ -47,8 +47,8 @@ export default function ActiveQuiz() {
 
     // Use the new real-time game updates hook
     const {
-        gameStatus,
-        gameState: wsGameState,
+        game_status: gameStatus,
+        game_state: wsGameState,
         isConnected,
         isLoading: loading,
         error,
