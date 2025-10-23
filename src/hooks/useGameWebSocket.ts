@@ -19,8 +19,7 @@ export interface Player {
     player_name: string;
     player_photo?: string;
     connected_at?: string;
-    answered_current?: boolean;
-    score?: number;
+    player_answered?: boolean;
 }
 
 export interface UseGameWebSocketOptions

@@ -146,7 +146,7 @@ export default function SessionWaitingRoom() {
                             className="px-4 py-2 bg-ink-800 rounded-xl flex justify-between items-center"
                         >
                             <span>{p.player_name || p.player_id}</span>
-                            {p.answered_current && (
+                            {p.connected_at && (
                                 <span className="text-xs text-tea-400">
                                     ✓ Ready
                                 </span>

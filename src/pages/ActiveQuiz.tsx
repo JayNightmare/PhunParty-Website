@@ -1,6 +1,8 @@
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Session, Question, MCQOption, Player } from "@/types";
+import { Session, Question, MCQOption } from "@/types";
+import { Player } from "@/hooks/useGameWebSocket";
+
 import Card from "@/components/Card";
 import {
     getSessionStatus,
@@ -301,6 +303,8 @@ export default function ActiveQuiz() {
                 } catch (error) {
                     console.error("Failed to fetch current question:", error);
                     setQuestion(null);
+                    setGameState("ended");
+                    navigate(`/stats/${sessionId}/`);
                 }
             };
             fetchCurrentQuestion();
@@ -312,11 +316,10 @@ export default function ActiveQuiz() {
             if (Array.isArray(game_status.players)) {
                 game_status.players.forEach((player: any) => {
                     playerList.push({
-                        id: player.player_id || player.id,
-                        name: player.player_name || player.name,
-                        email: player.player_email || player.email,
-                        answeredCurrent: player.answered_current || false,
-                        score: player.score || 0,
+                        player_id: player.player_id || player.id,
+                        player_name: player.player_name || player.name,
+                        player_photo: player.player_photo || player.photo,
+                        connected_at: player.connected_at || null,
                     });
                 });
             } else if (typeof game_status.players === "object") {
@@ -325,11 +328,10 @@ export default function ActiveQuiz() {
                 if (playersObj.list && Array.isArray(playersObj.list)) {
                     playersObj.list.forEach((player: any) => {
                         playerList.push({
-                            id: player.player_id || player.id,
-                            name: player.player_name || player.name,
-                            email: player.player_email || player.email,
-                            answeredCurrent: player.answered_current || false,
-                            score: player.score || 0,
+                            player_id: player.player_id || player.id,
+                            player_name: player.player_name || player.name,
+                            player_photo: player.player_photo || player.photo,
+                            connected_at: player.connected_at || null,
                         });
                     });
                 }
@@ -429,6 +431,8 @@ export default function ActiveQuiz() {
             // }
         } catch (error) {
             showError("Failed to end game");
+            setGameState("ended");
+            navigate(`/stats/${sessionId}/`);
         }
     };
 
@@ -468,7 +472,13 @@ export default function ActiveQuiz() {
         );
 
     const keyer = `${sessionId}-${question?.id}`;
-    const playersAnswered = players.filter((p) => p.answeredCurrent).length;
+
+    // Compute answered players using server-provided counts when available,
+    // otherwise fall back to per-player answered flags.
+    const playersAnswered =
+        game_status?.player_response_counts?.answered ??
+        players.filter((p: any) => p.answered_current || p.answeredCurrent)
+            .length;
 
     // Intro screen overlay
     if (introMode) {
@@ -642,30 +652,27 @@ export default function ActiveQuiz() {
                             <div className="space-y-2 max-h-96 overflow-y-auto">
                                 {players.map((p: Player) => (
                                     <div
-                                        key={p.id}
+                                        key={p.player_id}
                                         className={`flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
-                                            p.answeredCurrent
+                                            p.player_answered
                                                 ? "bg-green-900/30 border border-green-500/30"
                                                 : "bg-ink-700"
                                         }`}
                                     >
                                         <div className="font-medium">
-                                            {p.name}
+                                            {p.player_name}
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div
                                                 className={`text-sm ${
-                                                    p.answeredCurrent
+                                                    p.player_answered
                                                         ? "text-green-300"
                                                         : "text-stone-400"
                                                 }`}
                                             >
-                                                {p.answeredCurrent
+                                                {p.player_answered
                                                     ? "✓ Answered"
                                                     : "Thinking..."}
-                                            </div>
-                                            <div className="text-sm font-semibold">
-                                                {p.score || 0} pts
                                             </div>
                                         </div>
                                     </div>

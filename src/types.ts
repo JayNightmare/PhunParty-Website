@@ -1,3 +1,5 @@
+import { Player } from "@/hooks/useGameWebSocket";
+
 // Backend-aligned types
 export type Difficulty = "Easy" | "Medium" | "Hard";
 export type GameType = "Trivia";
@@ -13,18 +15,6 @@ export type Question = {
     answer: string;
     difficulty?: Difficulty;
     genre?: string;
-};
-
-// Frontend Player type (for display)
-export type Player = {
-    id: string;
-    name: string;
-    email?: string;
-    mobile?: string;
-    score?: number;
-    correct?: number;
-    answeredCurrent?: boolean;
-    active_game_code?: string;
 };
 
 // Frontend Session type (for display)

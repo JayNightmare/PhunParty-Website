@@ -1,5 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from "react";
-import { Session, MCQOption, Player, Question } from "@/types";
+import { Session, MCQOption, Question } from "@/types";
+import { Player } from "@/hooks/useGameWebSocket";
 import { useParams } from "react-router-dom";
 import Card from "@/components/Card";
 import {
@@ -242,7 +243,7 @@ export default function Join() {
 
             const playerData = {
                 session_code: sessionId,
-                player_id: player.id,
+                player_id: player.player_id,
             };
 
             // Step 2: Join the game session with the player ID
@@ -264,7 +265,7 @@ export default function Join() {
                         : null;
                     if (player) {
                         setPendingRejoin({
-                            playerId: player.id,
+                            playerId: player.player_id,
                             targetSession: sessionId || "",
                         });
                     }
@@ -316,7 +317,7 @@ export default function Join() {
                     player_id: myId,
                     session_code: sessionId,
                     question_id: question.id,
-                    answer: v,
+                    player_answer: v,
                 });
                 showSuccess("Answer submitted!");
             }

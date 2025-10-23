@@ -454,7 +454,7 @@ export interface SubmitAnswerRequest {
     player_id: string;
     session_code: string;
     question_id: string;
-    answer: string;
+    player_answer: string;
 }
 
 export interface JoinGameRequest {
@@ -656,7 +656,7 @@ export async function submitAnswer(
         player_id: data.player_id,
         session_code: data.session_code,
         question_id: data.question_id,
-        player_answer: data.answer,
+        player_answer: data.player_answer,
     };
 
     return apiFetch<SubmitAnswerResponse>("/game-logic/submit-answer", {
