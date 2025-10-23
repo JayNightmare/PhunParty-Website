@@ -32,7 +32,7 @@ export default function ActiveQuiz() {
     const [question, setQuestion] = useState<Question | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
     const [gameState, setGameState] = useState<
-        "waiting" | "active" | "paused" | "completed"
+        "waiting" | "active" | "paused" | "ended"
     >("waiting");
     const { success, error: showError } = useToast();
     const containerRef = useRef<HTMLDivElement>(null);
@@ -222,11 +222,11 @@ export default function ActiveQuiz() {
                 case "waiting":
                     setGameState("waiting");
                     break;
-                case "completed":
-                    setGameState("completed");
+                case "ended":
+                    setGameState("ended");
                     break;
                 default:
-                    setGameState("completed");
+                    setGameState("ended");
             }
         } else {
             // Default to active if no explicit state but a current question exists
@@ -342,9 +342,10 @@ export default function ActiveQuiz() {
     useEffect(() => {
         if (!sessionId) return;
 
-        if (gameStatus?.game_state === "completed") {
+        if (gameStatus?.game_state === "ended") {
             if (!hasNavigatedToStats.current) {
                 hasNavigatedToStats.current = true;
+                handleEndGame();
                 navigate(`/stats/${sessionId}/`, { replace: true });
             }
         } else {
@@ -530,9 +531,7 @@ export default function ActiveQuiz() {
                 {/* Game State and Controls */}
                 <div className="grid md:grid-cols-2 gap-4">
                     <GameStateIndicator
-                        gameState={
-                            gameState === "completed" ? "ended" : gameState
-                        }
+                        gameState={gameState === "ended" ? "ended" : gameState}
                         currentQuestion={
                             gameStatus?.current_question_index
                                 ? gameStatus.current_question_index + 1
