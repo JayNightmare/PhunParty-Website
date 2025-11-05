@@ -360,6 +360,12 @@ type BackendQuestion = {
     is_active?: boolean;
 };
 
+type GameTypeResponse = {
+    game_code: string;
+    rules?: string;
+    genre?: string;
+};
+
 const mapScore = (raw: BackendScore): ScoresResponseModel => ({
     score_id: raw.score_id,
     player_id: raw.player_id,
@@ -466,6 +472,7 @@ export interface CreateSessionRequest {
     host_name?: string;
     number_of_questions?: number;
     ispublic: boolean;
+    difficulty: string;
 }
 
 export interface SubmitAnswerRequest {
@@ -720,6 +727,7 @@ export async function createSession(
         game_code: data.game_code,
         host_name: data.host_name ?? "Host",
         number_of_questions: data.number_of_questions ?? 5,
+        difficulty: data.difficulty ?? "Easy",
     };
 
     const raw = await apiFetch<BackendGameSession>("/game/create/session", {
@@ -742,20 +750,17 @@ export async function getGameSession(game_code: string): Promise<GameResponse> {
     return mapGame(raw);
 }
 
-// ! Wait for Endpoint ! \\
+// *! Wait for Endpoint ! \\
 export async function getGames(): Promise<GameHistory[]> {
     const raw = await apiFetch<BackendGameHistory[]>("/game/history");
     return raw.map(mapHistory);
 }
 
 // Get unique game types (genres) from all available games
-// export async function getGameTypes(): Promise<string[]> {
-//     const games = await getGames();
-//     const gameTypes = [
-//         ...new Set(games.map((game) => game.name).filter(Boolean)),
-//     ];
-//     return gameTypes.length > 0 ? gameTypes : ["trivia", "speed-round"]; // fallback
-// }
+export async function getGameTypes(): Promise<GameTypeResponse[]> {
+    const raw = await apiFetch<GameTypeResponse[]>("/game/");
+    return raw;
+}
 
 // Get user's created sessions from localStorage
 export async function getOwnedUserSessions(): Promise<GameResponse[]> {

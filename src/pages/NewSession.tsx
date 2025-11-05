@@ -34,9 +34,12 @@ export default function NewSession() {
             try {
                 setLoadingGameTypes(true);
                 const gameTypes = await getGameTypes();
-                setAvailableGameTypes(gameTypes);
-                if (gameTypes.length > 0) {
-                    setSelectedGameType(gameTypes[0]);
+                const gameTypeStrings = gameTypes
+                    .map((gt) => gt.genre)
+                    .filter(Boolean) as string[];
+                setAvailableGameTypes(gameTypeStrings);
+                if (gameTypeStrings.length > 0) {
+                    setSelectedGameType(gameTypeStrings[0]);
                 }
             } catch (err) {
                 console.error("Failed to load available game types:", err);
@@ -88,7 +91,8 @@ export default function NewSession() {
             const games = await getGames();
             const gameOfType = games.find(
                 (game) =>
-                    game.name.toLowerCase() === selectedGameType.toLowerCase()
+                    game.game_type.toLowerCase() ===
+                    selectedGameType.toLowerCase()
             );
 
             if (!gameOfType) {
@@ -101,8 +105,9 @@ export default function NewSession() {
                 owner_player_id: user?.id || undefined,
                 host_name: hostName.trim(),
                 number_of_questions: num,
-                game_code: gameOfType.code, // Use actual game code
+                game_code: gameOfType.session_code, // Use actual game code
                 ispublic: true,
+                difficulty,
             });
             showSuccess(`Session created! Code: ${session.code}`);
             // Navigate directly to waiting room for this session
