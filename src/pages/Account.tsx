@@ -21,6 +21,7 @@ export default function Account() {
   const [filterType, setFilterType] = useState<string>("All");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"All" | "Won" | "Lost" | "Draw">("All");
   const [testResult, setTestResult] = useState<string | null>(null);
   const [showTestResult, setShowTestResult] = useState(false);
 
@@ -134,11 +135,26 @@ export default function Account() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Game History Card */}
         <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Game History</h2>
+          <div className="flex items-center justify-between mb-4 flex-nowrap">
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-semibold">Game History</h2>
+              <label className="text-sm text-stone-400">Filter:</label>
+              <select
+                value={filter}
+                onChange={(e) =>
+                  setFilter(e.target.value as "All" | "Won" | "Lost" | "Draw")
+                }
+                className="bg-ink-700 text-sm text-stone-200 px-3 py-1 rounded-lg"
+              >
+                <option value="All">All</option>
+                <option value="Won">Won</option>
+                <option value="Lost">Lost</option>
+                <option value="Draw">Draw</option>
+              </select>
+            </div>
             <Link
               to="/new"
-              className="text-sm text-tea-400 hover:text-tea-300 transition-colors"
+              className="text-sm text-tea-400 hover:text-tea-300 transition-colors md:ml-6 flex-shrink-0 self-center"
             >
               Start New Game →
             </Link>
