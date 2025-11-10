@@ -148,28 +148,6 @@ export default function Account() {
                             <h2 className="text-lg font-semibold">
                                 Game History
                             </h2>
-                            <label className="text-sm text-stone-400">
-                                Filter:
-                            </label>
-                            <select
-                                title="Filter by result"
-                                value={filter}
-                                onChange={(e) =>
-                                    setFilter(
-                                        e.target.value as
-                                            | "All"
-                                            | "Won"
-                                            | "Lost"
-                                            | "Draw"
-                                    )
-                                }
-                                className="bg-ink-700 text-sm text-stone-200 px-3 py-1 rounded-lg"
-                            >
-                                <option value="All">All</option>
-                                <option value="Won">Won</option>
-                                <option value="Lost">Lost</option>
-                                <option value="Draw">Draw</option>
-                            </select>
                         </div>
                         <Link
                             to="/new"
