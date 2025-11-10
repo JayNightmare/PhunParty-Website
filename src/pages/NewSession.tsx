@@ -33,10 +33,23 @@ export default function NewSession() {
     const loadGameTypes = async () => {
       try {
         setLoadingGameTypes(true);
-        const gameTypes = await getGameTypes();
-        const gameTypeStrings = gameTypes
-          .map((gt) => gt.genre)
-          .filter(Boolean) as string[];
+        const gameTypes = (await getGameTypes()) as any[];
+
+        // Support multiple possible shapes returned by the API or test mocks:
+        // - Array of objects: [{ genre, game_code, ... }, ...]
+        // - Array of strings: ["trivia", "speed-round"]
+        let gameTypeStrings: string[] = [];
+
+        if (gameTypes.length === 0) {
+          gameTypeStrings = [];
+        } else if (typeof gameTypes[0] === "string") {
+          gameTypeStrings = gameTypes as string[];
+        } else {
+          gameTypeStrings = gameTypes
+            .map((gt) => gt?.genre || gt?.game_code || "")
+            .filter(Boolean) as string[];
+        }
+
         setAvailableGameTypes(gameTypeStrings);
         if (gameTypeStrings.length > 0) {
           setSelectedGameType(gameTypeStrings[0]);
