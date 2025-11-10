@@ -10,11 +10,36 @@ export function getWebSocketUrl(
   sessionCode: string,
   params?: Record<string, string>
 ): string {
-  const baseUrl = import.meta.env.DEV
-    ? "ws://localhost:8000"
-    : "wss://api.phun.party";
+  // Prefer an explicit WebSocket host when provided via environment. This
+  // allows connecting directly to a remote host (e.g. api.phun.party) or
+  // falling back to same-origin so the Vite dev server can proxy `/ws`.
+  const configured = (import.meta.env.VITE_WS_URL || "").toString();
 
-  const url = new URL(`/ws/session/${sessionCode}`, baseUrl);
+  let baseUrl: string;
+  if (configured) {
+    if (configured) {
+      const trimmed = configured.trim();
+      if (trimmed.startsWith("http://")) {
+        baseUrl = trimmed.replace(/^http:/, "ws:");
+      } else if (trimmed.startsWith("https://")) {
+        baseUrl = trimmed.replace(/^https:/, "wss:");
+      } else if (/^wss?:\/\//i.test(trimmed)) {
+        baseUrl = trimmed;
+      } else {
+        baseUrl = `${
+          import.meta.env.DEV ? "ws" : "wss"
+        }://${trimmed}`;
+      }
+    } else if (import.meta.env.DEV) {
+      // Use same-origin in dev so the Vite server proxy can forward the upgrade
+      baseUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${
+        location.host
+      }`;
+    } else {
+      baseUrl = "wss://api.phun.party";
+    }
+
+    const url = new URL(`/ws/session/${sessionCode}`, baseUrl);
 
   if (params) {
     Object.entries(params).forEach(([key, value]) => {

@@ -6,6 +6,7 @@ import {
   GameResponse,
   testApiConnection,
   GameHistory,
+  DidWin,
 } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { ProfileSkeleton, GameListSkeleton } from "@/components/Skeleton";
@@ -16,8 +17,11 @@ export default function Account() {
   const { user, isLoading: authLoading } = useAuth();
   const { showError } = useToast();
   const [games, setGames] = useState<GameHistory[]>([]);
+  const [filterResult, setFilterResult] = useState<"All" | DidWin>("All");
+  const [filterType, setFilterType] = useState<string>("All");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"All" | "Won" | "Lost" | "Draw">("All");
   const [testResult, setTestResult] = useState<string | null>(null);
   const [showTestResult, setShowTestResult] = useState(false);
 
@@ -131,14 +135,59 @@ export default function Account() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Game History Card */}
         <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Game History</h2>
+          <div className="flex items-center justify-between mb-4 flex-nowrap">
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-semibold">Game History</h2>
+              <label className="text-sm text-stone-400">Filter:</label>
+              <select
+                value={filter}
+                onChange={(e) =>
+                  setFilter(e.target.value as "All" | "Won" | "Lost" | "Draw")
+                }
+                className="bg-ink-700 text-sm text-stone-200 px-3 py-1 rounded-lg"
+              >
+                <option value="All">All</option>
+                <option value="Won">Won</option>
+                <option value="Lost">Lost</option>
+                <option value="Draw">Draw</option>
+              </select>
+            </div>
             <Link
               to="/new"
-              className="text-sm text-tea-400 hover:text-tea-300 transition-colors"
+              className="text-sm text-tea-400 hover:text-tea-300 transition-colors md:ml-6 flex-shrink-0 self-center"
             >
               Start New Game →
             </Link>
+          </div>
+
+          {/* Filters */}
+          <div className="flex items-center gap-3 mb-4">
+            <label className="text-sm text-stone-400">Filter:</label>
+            <select
+              aria-label="Filter by result"
+              value={filterResult}
+              onChange={(e) => setFilterResult(e.target.value as any)}
+              className="px-3 py-2 rounded-xl bg-ink-700 text-sm"
+            >
+              <option value="All">All results</option>
+              <option value="Won">Won</option>
+              <option value="Lost">Lost</option>
+              <option value="Draw">Draw</option>
+            </select>
+
+            <select
+              aria-label="Filter by game type"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-ink-700 text-sm"
+            >
+              <option value="All">All types</option>
+              {Array.from(new Set(games.map((g) => g.game_type))).map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-2 max-h-[40vh] overflow-auto pr-2">
@@ -156,18 +205,25 @@ export default function Account() {
             )}
             {!loading &&
               games.length > 0 &&
-              games.map((g) => (
-                <Link
-                  to={`/stats/${g.session_code}`}
-                  key={g.session_code}
-                  className="block px-3 py-2 bg-ink-700 rounded-xl hover:bg-ink-600 transition-colors"
-                >
-                  <div className="font-medium">{g.game_type}</div>
-                  <div className="text-xs text-stone-400">
-                    Code: {g.session_code} • Status: {g.did_win}
-                  </div>
-                </Link>
-              ))}
+              games
+                .filter((g) =>
+                  filterResult === "All" ? true : g.did_win === filterResult
+                )
+                .filter((g) =>
+                  filterType === "All" ? true : g.game_type === filterType
+                )
+                .map((g) => (
+                  <Link
+                    to={`/stats/${g.session_code}`}
+                    key={g.session_code}
+                    className="block px-3 py-2 bg-ink-700 rounded-xl hover:bg-ink-600 transition-colors"
+                  >
+                    <div className="font-medium">{g.game_type}</div>
+                    <div className="text-xs text-stone-400">
+                      Code: {g.session_code} • Status: {g.did_win}
+                    </div>
+                  </Link>
+                ))}
             {!loading && games.length === 0 && !error && (
               <div className="text-center py-8 text-stone-400">
                 <div className="text-4xl mb-2">🎯</div>
