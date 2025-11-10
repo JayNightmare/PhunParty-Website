@@ -10,9 +10,29 @@ export function getWebSocketUrl(
   sessionCode: string,
   params?: Record<string, string>
 ): string {
-  const baseUrl = import.meta.env.DEV
-    ? "ws://localhost:8000"
-    : "wss://api.phun.party";
+  // Prefer an explicit WebSocket host when provided via environment. This
+  // allows connecting directly to a remote host (e.g. api.phun.party) or
+  // falling back to same-origin so the Vite dev server can proxy `/ws`.
+  const configured = (import.meta.env.VITE_WS_URL || "").toString();
+
+  let baseUrl: string;
+  if (configured) {
+    // Normalize input: allow user to supply ws://, wss://, http:// or https://
+    if (configured.startsWith("http://")) {
+      baseUrl = configured.replace(/^http:/, "ws:");
+    } else if (configured.startsWith("https://")) {
+      baseUrl = configured.replace(/^https:/, "wss:");
+    } else {
+      baseUrl = configured; // assume ws:// or wss://
+    }
+  } else if (import.meta.env.DEV) {
+    // Use same-origin in dev so the Vite server proxy can forward the upgrade
+    baseUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${
+      location.host
+    }`;
+  } else {
+    baseUrl = "wss://api.phun.party";
+  }
 
   const url = new URL(`/ws/session/${sessionCode}`, baseUrl);
 
