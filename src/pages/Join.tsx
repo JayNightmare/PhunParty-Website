@@ -57,7 +57,6 @@ export default function Join() {
     isConnected,
     isLoading: statusLoading,
     error: statusError,
-    lastUpdate,
     sendMessage,
   } = useGameUpdates({
     sessionCode: sessionId || "",
