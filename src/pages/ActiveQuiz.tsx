@@ -59,9 +59,6 @@ export default function ActiveQuiz() {
     refetch,
     connectedPlayers,
     sendMessage,
-    startGame,
-    nextQuestion: wsNextQuestion,
-    endGame: wsEndGame,
     submitAnswer,
     pressBuzzer,
   } = useGameUpdates({
@@ -80,7 +77,6 @@ export default function ActiveQuiz() {
   const {
     attachGestures,
     isRefreshing: gestureRefreshing,
-    pullDistance,
   } = useTouchGestures({
     onSwipeLeft: async () => {
       if (
@@ -324,28 +320,74 @@ export default function ActiveQuiz() {
 
       const prompt = wsQ.question || wsQ.prompt || "";
       const id = wsQ.question_id || wsQ.id || prompt;
-      const displayOptions: string[] = wsQ.display_options || wsQ.options || [];
+      const rawOptions = wsQ.display_options ?? wsQ.options ?? null;
       const uiMode = wsQ.ui_mode; // Get ui_mode from backend
 
       console.log("[ActiveQuiz] Raw question object keys:", Object.keys(wsQ));
       console.log("[ActiveQuiz] ui_mode:", uiMode);
-      console.log("[ActiveQuiz] Extracted displayOptions:", displayOptions);
+      console.log("[ActiveQuiz] Extracted rawOptions:", rawOptions);
       console.log(
-        "[ActiveQuiz] displayOptions type:",
-        typeof displayOptions,
+        "[ActiveQuiz] rawOptions type:",
+        rawOptions === null ? "null" : typeof rawOptions,
         "isArray:",
-        Array.isArray(displayOptions),
+        Array.isArray(rawOptions),
         "length:",
-        displayOptions?.length
+        Array.isArray(rawOptions)
+          ? rawOptions.length
+          : rawOptions && typeof rawOptions === "object"
+          ? Object.keys(rawOptions).length
+          : 0
       );
 
-      const mcqOptions: MCQOption[] =
-        Array.isArray(displayOptions) && displayOptions.length > 0
-          ? displayOptions.map((opt: string, i: number) => ({
-              id: `option_${i}`,
-              text: opt,
-            }))
-          : [];
+      const mcqOptions: MCQOption[] = (() => {
+        if (!rawOptions) return [];
+
+        if (Array.isArray(rawOptions)) {
+          return rawOptions
+            .map((opt: any, index: number) => {
+              if (typeof opt === "string") {
+                return { id: `option_${index}`, text: opt };
+              }
+              if (opt && typeof opt === "object") {
+                return {
+                  id:
+                    (opt.id ??
+                      opt.option_id ??
+                      opt.key ??
+                      `option_${index}`).toString(),
+                  text:
+                    opt.text ??
+                    opt.label ??
+                    opt.option_text ??
+                    opt.value ??
+                    "",
+                };
+              }
+              return null;
+            })
+            .filter((opt): opt is MCQOption => Boolean(opt?.text));
+        }
+
+        if (typeof rawOptions === "object") {
+          return Object.entries(rawOptions as Record<string, any>).map(
+            ([key, value], index) => ({
+              id: (key || `option_${index}`).toString(),
+              text:
+                typeof value === "string"
+                  ? value
+                  : value && typeof value === "object"
+                  ? value.text ??
+                    value.label ??
+                    value.option_text ??
+                    value.value ??
+                    ""
+                  : String(value ?? ""),
+            })
+          );
+        }
+
+        return [];
+      })();
 
       console.log("[ActiveQuiz] Created mcqOptions:", mcqOptions);
 
