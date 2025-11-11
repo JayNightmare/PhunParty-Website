@@ -59,7 +59,6 @@ export default function ActiveQuiz() {
     refetch,
     connectedPlayers,
     sendMessage,
-    startGame,
     nextQuestion: wsNextQuestion,
     endGame: wsEndGame,
     submitAnswer,
