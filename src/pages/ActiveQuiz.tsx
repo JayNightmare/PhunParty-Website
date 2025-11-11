@@ -77,7 +77,6 @@ export default function ActiveQuiz() {
   const {
     attachGestures,
     isRefreshing: gestureRefreshing,
-    pullDistance,
   } = useTouchGestures({
     onSwipeLeft: async () => {
       if (
