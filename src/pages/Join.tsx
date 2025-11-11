@@ -261,7 +261,17 @@ export default function Join() {
       if (stored) {
         try {
           const playerData = JSON.parse(stored);
-          setMyId(playerData.id);
+          // Use player_id field (Player type uses player_id, not id)
+          const playerId = playerData.player_id || playerData.id;
+          if (playerId) {
+            setMyId(playerId);
+            console.log("[Join] Loaded player ID from storage:", playerId);
+          } else {
+            console.warn(
+              "[Join] No player_id found in stored data:",
+              playerData
+            );
+          }
           // Have the user enter their name each time for better UX
           setName("");
         } catch (error) {
