@@ -92,7 +92,6 @@ export default function Join() {
   const {
     attachGestures,
     isRefreshing: gestureRefreshing,
-    pullDistance,
   } = useTouchGestures({
     onPullToRefresh: async () => {
       setIsRefreshing(true);
