@@ -59,7 +59,6 @@ export default function ActiveQuiz() {
     refetch,
     connectedPlayers,
     sendMessage,
-    endGame: wsEndGame,
     submitAnswer,
     pressBuzzer,
   } = useGameUpdates({
