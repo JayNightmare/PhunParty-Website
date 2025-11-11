@@ -74,10 +74,7 @@ export default function ActiveQuiz() {
   });
 
   // Touch gestures for swipe navigation and pull-to-refresh
-  const {
-    attachGestures,
-    isRefreshing: gestureRefreshing,
-  } = useTouchGestures({
+  const { attachGestures, isRefreshing: gestureRefreshing } = useTouchGestures({
     onSwipeLeft: async () => {
       if (
         game_status &&
@@ -350,17 +347,14 @@ export default function ActiveQuiz() {
               }
               if (opt && typeof opt === "object") {
                 return {
-                  id:
-                    (opt.id ??
-                      opt.option_id ??
-                      opt.key ??
-                      `option_${index}`).toString(),
+                  id: (
+                    opt.id ??
+                    opt.option_id ??
+                    opt.key ??
+                    `option_${index}`
+                  ).toString(),
                   text:
-                    opt.text ??
-                    opt.label ??
-                    opt.option_text ??
-                    opt.value ??
-                    "",
+                    opt.text ?? opt.label ?? opt.option_text ?? opt.value ?? "",
                 };
               }
               return null;
@@ -398,6 +392,10 @@ export default function ActiveQuiz() {
           : "Easy"
       ) as Question["difficulty"];
       const correctIndex: number | undefined = wsQ.correct_index;
+
+      // Build a simple displayOptions array from mcqOptions (texts only) so we can safely index into it.
+      const displayOptions: string[] = mcqOptions.map((opt) => opt.text);
+
       const answerText =
         typeof correctIndex === "number" && Array.isArray(displayOptions)
           ? displayOptions[correctIndex] ?? ""
