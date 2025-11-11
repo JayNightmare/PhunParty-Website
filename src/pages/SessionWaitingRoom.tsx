@@ -43,13 +43,48 @@ export default function SessionWaitingRoom() {
 
   const handleStart = async () => {
     if (!sessionCode) return;
+
+    // Validate that we have players before starting
+    if (connectedPlayers.length === 0) {
+      showError(
+        "Cannot start game: No players have joined yet. Please wait for at least one player to scan the QR code."
+      );
+      return;
+    }
+
+    // Check if WebSocket player count matches backend count
+    const backendPlayerCount = game_status?.player_response_counts?.total || 0;
+    const wsPlayerCount = connectedPlayers.length;
+
+    if (backendPlayerCount > wsPlayerCount && backendPlayerCount > 0) {
+      showError(
+        `Player sync in progress (${wsPlayerCount}/${backendPlayerCount} ready). Please wait a moment...`
+      );
+      // Wait for sync and retry
+      setTimeout(() => {
+        if (connectedPlayers.length < backendPlayerCount) {
+          showError(
+            "Some players may not be fully connected. Starting anyway..."
+          );
+        }
+      }, 2000);
+      return;
+    }
+
+    console.log(
+      `[SessionWaitingRoom] Starting game with ${wsPlayerCount} confirmed player(s)`,
+      connectedPlayers
+    );
+
     setIsStarting(true);
     try {
       // Do NOT start the backend game yet; navigate to intro screen first
-      showSuccess("Launching tutorial...");
+      showSuccess(`Launching tutorial with ${wsPlayerCount} player(s)...`);
       // Send WebSocket start signal BEFORE navigation to avoid unmount race
       try {
         wsStartGame();
+        // Wait a moment to ensure the WebSocket message is fully sent before navigating
+        await new Promise((resolve) => setTimeout(resolve, 200));
       } catch (e) {
         console.warn("Failed to send start_game WS message early", e);
       }
@@ -113,14 +148,41 @@ export default function SessionWaitingRoom() {
                 </LoadingButton>
               </div>
             ) : (
-              <LoadingButton
-                onClick={handleStart}
-                isLoading={isStarting}
-                loadingText="Starting..."
-                className="px-6 py-3"
-              >
-                Start Game
-              </LoadingButton>
+              <div className="space-y-3">
+                {/* Only show status when players are syncing or confirmed */}
+                {connectedPlayers.length > 0 &&
+                  game_status?.player_response_counts?.total !==
+                    connectedPlayers.length && (
+                    <div className="p-3 bg-tea-900/20 rounded-xl text-sm text-tea-400 border border-tea-500/20 flex items-center gap-2">
+                      <LoadingSpinner size="sm" color="primary" />
+                      <div className="flex-1">
+                        <div className="font-medium">Syncing players...</div>
+                        <div className="text-xs text-stone-400">
+                          {connectedPlayers.length}/
+                          {game_status?.player_response_counts?.total || 0}{" "}
+                          ready
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                {connectedPlayers.length > 0 &&
+                  game_status?.player_response_counts?.total ===
+                    connectedPlayers.length && (
+                    <div className="p-3 bg-tea-900/20 rounded-xl text-sm text-tea-400 border border-tea-500/20">
+                      ✓ All {connectedPlayers.length} player(s) confirmed and
+                      ready!
+                    </div>
+                  )}
+                <LoadingButton
+                  onClick={handleStart}
+                  isLoading={isStarting}
+                  loadingText="Starting..."
+                  className="px-6 py-3"
+                  disabled={connectedPlayers.length === 0}
+                >
+                  Start Game
+                </LoadingButton>
+              </div>
             )}
           </div>
           <div className="w-56 self-start">
@@ -131,20 +193,8 @@ export default function SessionWaitingRoom() {
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4">Players Joined</h3>
 
-        {/* Show a small joining indicator when the backend reports more players
-                    in the session total than we currently have in the connected list.
-                    This covers the case where a player has scanned the QR / initiated
-                    joining but hasn't yet appeared in the joined list due to timing. */}
-        {game_status &&
-          game_status.player_response_counts?.total >
-            connectedPlayers.length && (
-            <div className="flex items-center gap-2 mb-3 text-sm text-stone-300">
-              <LoadingSpinner size="sm" color="primary" />
-              <span>Players joining...</span>
-            </div>
-          )}
-
         <div className="space-y-2 max-h-80 overflow-y-auto">
+          {/* Show actual connected players */}
           {connectedPlayers.map((p) => (
             <div
               key={p.player_id}
@@ -156,11 +206,31 @@ export default function SessionWaitingRoom() {
               )}
             </div>
           ))}
-          {connectedPlayers.length === 0 && (
-            <div className="text-stone-500 text-sm text-center py-6">
-              No players yet...
-            </div>
-          )}
+
+          {/* Show loading placeholder for players that are joining but not yet in connectedPlayers */}
+          {game_status &&
+            game_status.player_response_counts?.total >
+              connectedPlayers.length &&
+            Array.from({
+              length:
+                game_status.player_response_counts.total -
+                connectedPlayers.length,
+            }).map((_, index) => (
+              <div
+                key={`loading-${index}`}
+                className="px-4 py-2 bg-ink-800 rounded-xl flex items-center gap-3 border border-tea-500/30"
+              >
+                <LoadingSpinner size="sm" color="primary" />
+                <span className="text-stone-400 text-sm">Joining...</span>
+              </div>
+            ))}
+
+          {connectedPlayers.length === 0 &&
+            game_status?.player_response_counts?.total === 0 && (
+              <div className="text-stone-500 text-sm text-center py-6">
+                No players yet...
+              </div>
+            )}
         </div>
       </Card>
     </main>
