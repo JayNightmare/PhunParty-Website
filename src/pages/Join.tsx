@@ -319,7 +319,7 @@ export default function Join() {
           if (player) {
             setPendingRejoin({
               playerId: player.player_id,
-              targetSession: sessionId || "",
+              targetSession: sessionId,
             });
           }
         } catch {}
