@@ -91,8 +91,6 @@ const useGameUpdates = ({
   // WebSocket event handlers
   const handlePlayerJoined = useCallback(
     (player: Player) => {
-      console.log("[useGameUpdates] handlePlayerJoined called:", player);
-
       // Don't manually update connectedPlayers here - it will be updated
       // via the useEffect that watches game_state.connectedPlayers
       setLastUpdate({
@@ -230,14 +228,6 @@ const useGameUpdates = ({
   // Update connected players from game state
   useEffect(() => {
     if (game_state?.connectedPlayers) {
-      console.log(
-        "[useGameUpdates] Syncing connectedPlayers from game_state:",
-        {
-          count: game_state.connectedPlayers.length,
-          players: game_state.connectedPlayers,
-        }
-      );
-
       // Only update if we have players, or if explicitly setting to empty (game ended)
       if (game_state.connectedPlayers.length > 0 || !game_state.isActive) {
         setConnectedPlayers(game_state.connectedPlayers);

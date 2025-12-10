@@ -18,80 +18,62 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import SessionWaitingRoom from "@/pages/SessionWaitingRoom";
 import { useEffect } from "react";
 import {
-    preloadCriticalComponents,
-    usePerformanceMonitoring,
+  preloadCriticalComponents,
+  usePerformanceMonitoring,
 } from "@/components/Performance";
 import DevTools from "@/components/DevTools";
 
 export default function App() {
-    // Performance monitoring
-    usePerformanceMonitoring();
+  // Performance monitoring
+  usePerformanceMonitoring();
 
-    // Register service worker for PWA functionality
-    useEffect(() => {
-        if ("serviceWorker" in navigator) {
-            window.addEventListener("load", () => {
-                navigator.serviceWorker
-                    .register("/sw.js")
-                    .then((registration) => {
-                        console.log("SW registered: ", registration);
-                    })
-                    .catch((registrationError) => {
-                        console.log(
-                            "SW registration failed: ",
-                            registrationError
-                        );
-                    });
-            });
-        }
+  // Register service worker for PWA functionality
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .then((registration) => {
+            // Service worker registered successfully
+          })
+          .catch((registrationError) => {
+            // Service worker registration failed
+          });
+      });
+    }
 
-        // Preload critical components on idle
-        preloadCriticalComponents();
-    }, []);
+    // Preload critical components on idle
+    preloadCriticalComponents();
+  }, []);
 
-    return (
-        <ErrorBoundary>
-            <ToastProvider>
-                <AuthProvider>
-                    <HashRouter>
-                        <Header />
-                        <PWAInstallPrompt />
-                        <Routes>
-                            <Route path="/" element={<Landing />} />
-                            <Route path="/login" element={<Login />} />
-                            <Route path="/register" element={<Register />} />
-                            <Route
-                                path="/forgot-password"
-                                element={<ForgotPassword />}
-                            />
-                            <Route path="/new" element={<NewSession />} />
-                            <Route
-                                path="/sessions"
-                                element={<ActiveSessions />}
-                            />
-                            <Route
-                                path="/session/:sessionCode/waiting"
-                                element={<SessionWaitingRoom />}
-                            />
-                            <Route
-                                path="/play/:sessionId"
-                                element={<ActiveQuiz />}
-                            />
-                            <Route
-                                path="/stats/:sessionId"
-                                element={<PostGameStats />}
-                            />
-                            <Route path="/account" element={<Account />} />
-                            <Route
-                                path="/account/edit"
-                                element={<EditProfile />}
-                            />
-                            <Route path="/join/:sessionId" element={<Join />} />
-                        </Routes>
-                        <DevTools />
-                    </HashRouter>
-                </AuthProvider>
-            </ToastProvider>
-        </ErrorBoundary>
-    );
+  return (
+    <ErrorBoundary>
+      <ToastProvider>
+        <AuthProvider>
+          <HashRouter>
+            <Header />
+            <PWAInstallPrompt />
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/new" element={<NewSession />} />
+              <Route path="/sessions" element={<ActiveSessions />} />
+              <Route
+                path="/session/:sessionCode/waiting"
+                element={<SessionWaitingRoom />}
+              />
+              <Route path="/play/:sessionId" element={<ActiveQuiz />} />
+              <Route path="/stats/:sessionId" element={<PostGameStats />} />
+              <Route path="/account" element={<Account />} />
+              <Route path="/account/edit" element={<EditProfile />} />
+              <Route path="/join/:sessionId" element={<Join />} />
+            </Routes>
+            <DevTools />
+          </HashRouter>
+        </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
+  );
 }

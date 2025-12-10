@@ -171,11 +171,6 @@ export default function ActiveQuiz() {
           if (sessionId) {
             // CRITICAL: Verify all players are synced before starting
             // This prevents players from being stuck in lobby or missing from leaderboard
-            console.log(`[Pre-game validation] Checking player sync...`);
-            console.log(
-              `[Pre-game validation] Connected players: ${connectedPlayers.length}`,
-              connectedPlayers
-            );
 
             // Wait a moment to ensure WebSocket state is fully synced
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -186,25 +181,14 @@ export default function ActiveQuiz() {
               game_status?.player_response_counts?.total || 0;
             const wsPlayerCount = connectedPlayers.length;
 
-            console.log(
-              `[Pre-game validation] Backend reports ${backendPlayerCount} players, WS has ${wsPlayerCount} players`
-            );
-
             // If there's a mismatch, wait a bit longer for sync
             if (backendPlayerCount > wsPlayerCount && backendPlayerCount > 0) {
-              console.warn(
-                `[Pre-game validation] Player count mismatch detected. Waiting for sync...`
-              );
               showError("Ensuring all players are ready...");
               await new Promise((resolve) => setTimeout(resolve, 1500));
             }
 
             // Re-check after delay
             const finalPlayerCount = connectedPlayers.length;
-            console.log(
-              `[Pre-game validation] Final player count: ${finalPlayerCount}`,
-              connectedPlayers
-            );
 
             if (finalPlayerCount === 0) {
               showError(
@@ -216,7 +200,6 @@ export default function ActiveQuiz() {
             }
 
             // Start game after tutorial intro completes
-            console.log("[Pre-game validation] Starting game on backend...");
             await startGameApi({ session_code: sessionId });
 
             // Explicitly set game state to active immediately
@@ -226,8 +209,26 @@ export default function ActiveQuiz() {
             setIntroMode(false);
             setCountdown(null);
 
-            // Give a very brief moment for the UI to update, then show success
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            // Send synchronization pulse to all clients via WebSocket
+            // This ensures mobile devices are ready to receive the question
+            if (sendMessage && isConnected) {
+              sendMessage({
+                type: "countdown_complete",
+                data: {
+                  session_code: sessionId,
+                  ready_for_question: true,
+                  player_count: finalPlayerCount,
+                  timestamp: new Date().toISOString(),
+                },
+              });
+            }
+
+            // CRITICAL: Trigger REST refetch to pull the current question
+            // This is what makes the timer work - do it immediately after game start
+            await refetch();
+
+            // Give a moment for data to propagate through all state updates
+            await new Promise((resolve) => setTimeout(resolve, 200));
 
             success(`Game started with ${finalPlayerCount} player(s)`);
           }
@@ -289,52 +290,15 @@ export default function ActiveQuiz() {
     const gameHasStarted =
       game_status?.isstarted || (wsGameState as any)?.isStarted;
 
-    // Skip WebSocket question processing if we're still in intro mode or countdown
-    // Let the REST API fetch in the countdown useEffect handle the initial question
-    const shouldProcessWSQuestion =
-      wsQ && gameHasStarted && !introMode && countdown === null;
-
-    console.log("[ActiveQuiz] Question processing check:", {
-      hasWsQ: !!wsQ,
-      wsQuestionId: wsQ?.question_id || wsQ?.id,
-      gameHasStarted,
-      introMode,
-      countdown,
-      shouldProcessWSQuestion,
-      currentQuestionId: question?.id,
-    });
+    // Process WebSocket question immediately when game starts
+    // This ensures MCQ options appear right away, not after countdown
+    const shouldProcessWSQuestion = wsQ && gameHasStarted;
 
     if (shouldProcessWSQuestion) {
-      console.log("[ActiveQuiz] Processing WebSocket question:", {
-        wsQ,
-        display_options: wsQ.display_options,
-        options: wsQ.options,
-        question: wsQ.question,
-        prompt: wsQ.prompt,
-        difficulty: wsQ.difficulty,
-        gameHasStarted,
-      });
-
       const prompt = wsQ.question || wsQ.prompt || "";
       const id = wsQ.question_id || wsQ.id || prompt;
       const rawOptions = wsQ.display_options ?? wsQ.options ?? null;
       const uiMode = wsQ.ui_mode; // Get ui_mode from backend
-
-      console.log("[ActiveQuiz] Raw question object keys:", Object.keys(wsQ));
-      console.log("[ActiveQuiz] ui_mode:", uiMode);
-      console.log("[ActiveQuiz] Extracted rawOptions:", rawOptions);
-      console.log(
-        "[ActiveQuiz] rawOptions type:",
-        rawOptions === null ? "null" : typeof rawOptions,
-        "isArray:",
-        Array.isArray(rawOptions),
-        "length:",
-        Array.isArray(rawOptions)
-          ? rawOptions.length
-          : rawOptions && typeof rawOptions === "object"
-          ? Object.keys(rawOptions).length
-          : 0
-      );
 
       const mcqOptions: MCQOption[] = (() => {
         if (!rawOptions) return [];
@@ -383,8 +347,6 @@ export default function ActiveQuiz() {
         return [];
       })();
 
-      console.log("[ActiveQuiz] Created mcqOptions:", mcqOptions);
-
       const rawDiff: string = wsQ.difficulty || "Easy";
       const difficulty = (
         rawDiff
@@ -405,7 +367,7 @@ export default function ActiveQuiz() {
       let questionType: "mcq" | "free";
       if (uiMode === "multiple_choice") {
         questionType = "mcq";
-      } else if (uiMode === "free_text") {
+      } else if (uiMode === "text_input" || uiMode === "free_text") {
         questionType = "free";
       } else {
         // Fallback: determine by options existence
@@ -422,15 +384,6 @@ export default function ActiveQuiz() {
         difficulty,
       };
 
-      console.log("[ActiveQuiz] Final question state:", {
-        uiMode,
-        questionType,
-        mcqOptionsLength: mcqOptions.length,
-        type: finalQuestion.type,
-        optionsCount: finalQuestion.options?.length,
-        difficulty: finalQuestion.difficulty,
-      });
-      console.log("[ActiveQuiz] Setting question:", finalQuestion);
       setQuestion(finalQuestion);
     } else {
       // Fallback to fetching current question via REST
@@ -543,19 +496,15 @@ export default function ActiveQuiz() {
   const handleNextQuestion = async () => {
     if (!sessionId) return;
     try {
-      // Try WebSocket first if connected, fallback to HTTP API
-      // if (isConnected && wsGameControls) {
+      // Try WebSocket first if connected
       wsGameControls.nextQuestion();
       success("Moving to next question via WebSocket...");
-      // } else {
-      //     const response = await nextQuestion({
-      //         session_code: sessionId,
-      //     });
-      //     if (response.success) {
-      //         success("Moved to next question");
-      //         await refetch();
-      //     }
-      // }
+
+      // Also trigger a refetch to ensure we get the updated question
+      // This is a fallback in case the WebSocket doesn't broadcast the new question
+      setTimeout(async () => {
+        await refetch();
+      }, 500);
     } catch (error) {
       showError("Failed to go to next question");
     }
@@ -769,6 +718,23 @@ export default function ActiveQuiz() {
               <div className="text-lg mb-6">
                 {question?.prompt || "Loading question..."}
               </div>
+
+              {(() => {
+                const hasQuestion = !!question;
+                const questionType = question?.type;
+                const hasOptions = !!question?.options;
+                const optionsLength = question?.options?.length;
+                const optionsArray = question?.options;
+                    willRenderMCQ: !!(
+                      question?.type === "mcq" && question.options
+                    ),
+                    introMode,
+                    countdown,
+                    gameState: game_state,
+                  }
+                );
+                return null;
+              })()}
 
               {question?.type === "mcq" && question.options && (
                 <div className="grid grid-cols-2 gap-3">

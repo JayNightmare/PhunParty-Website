@@ -127,8 +127,6 @@ export const useGameWebSocket = (
 
   const handleMessage = useCallback(
     (message: PhunPartyWebSocketMessage) => {
-      console.log("Game WebSocket message:", message);
-
       // Helper to normalize various backend payload shapes into a plain question object
       const extractQuestion = (raw: any): any | null => {
         if (!raw) return null;
@@ -251,9 +249,8 @@ export const useGameWebSocket = (
         // New broadcast messages for questions/answers
         case "qa_question": {
           setGameState((prev) => {
-            const normalized = extractQuestion(
-              message.data?.question || message.data
-            );
+            // Backend sends complete question object directly in message.data
+            const normalized = message.data;
             if (!prev) {
               return {
                 sessionCode,
@@ -355,6 +352,11 @@ export const useGameWebSocket = (
               game_state: data.connection_stats ?? base.game_state,
             };
           });
+
+          // Trigger question callback if there's a question in the update
+          if (normalizedQuestion) {
+            onQuestionStarted?.(normalizedQuestion);
+          }
           break;
         }
 
@@ -403,6 +405,11 @@ export const useGameWebSocket = (
               game_state: data.connection_stats ?? base.game_state,
             };
           });
+
+          // Trigger question callback if there's a question in the broadcast
+          if (normalizedQuestion) {
+            onQuestionStarted?.(normalizedQuestion);
+          }
           break;
         }
         case "initial_state":
@@ -506,15 +513,6 @@ export const useGameWebSocket = (
           break;
 
         case "game_started":
-          console.log(
-            "🎮 Game starting - received game_started message:",
-            message.data
-          );
-          console.log(
-            "🎮 game_started - Full message object:",
-            JSON.stringify(message, null, 2)
-          );
-
           setGameState((prev) => {
             if (!prev) {
               return {
@@ -553,17 +551,10 @@ export const useGameWebSocket = (
               message.data?.currentQuestion || message.data?.current_question;
 
             if (questionData) {
-              console.log("📝 game_started includes question:", questionData);
               const normalizedQuestion = extractQuestion(questionData);
-              console.log("📝 Normalized question:", normalizedQuestion);
               currentQuestion = mergeQuestion(
                 prev.currentQuestion,
                 normalizedQuestion
-              );
-              console.log("📝 Merged question:", currentQuestion);
-            } else {
-              console.log(
-                "📝 game_started without question - waiting for question_started message"
               );
             }
 
@@ -575,6 +566,9 @@ export const useGameWebSocket = (
               isStarted: true,
             } as any;
           });
+
+          // Only call onGameStarted - do NOT call onQuestionStarted yet
+          // The question will be shown when question_started arrives AFTER the intro
           onGameStarted?.();
           break;
 
@@ -592,37 +586,26 @@ export const useGameWebSocket = (
           break;
 
         case "question_started":
-          console.log(
-            "[useGameWebSocket] Received question_started:",
-            message.data
-          );
-
           setGameState((prev) => {
             if (!prev) return null;
-            const normalized = extractQuestion(
-              message.data?.question || message.data
-            );
-
-            console.log(
-              "[useGameWebSocket] question_started normalized:",
-              normalized
-            );
-            console.log(
-              "[useGameWebSocket] question_started prev.currentQuestion:",
-              prev.currentQuestion
-            );
+            // Backend sends complete question object directly in message.data
+            // Don't extract nested fields - use it as-is
+            const normalized = message.data;
 
             const mergedQuestion = mergeQuestion(
               prev.currentQuestion,
               normalized
             );
 
-            console.log(
-              "[useGameWebSocket] question_started mergedQuestion:",
-              mergedQuestion
-            );
-
-            return { ...prev, currentQuestion: mergedQuestion };
+            return {
+              ...prev,
+              isActive: true,
+              currentQuestion: mergedQuestion,
+              connectedPlayers: prev.connectedPlayers.map((p) => ({
+                ...p,
+                answered_current: false,
+              })),
+            };
           });
           onQuestionStarted?.(message.data);
           break;
@@ -695,20 +678,12 @@ export const useGameWebSocket = (
           break;
 
         case "connection_established":
-          console.log(
-            "✅ Connection established:",
-            message.data?.session_code,
-            "WS ID:",
-            message.data?.ws_id
-          );
-
           // Send acknowledgment back to server if required
           if (
             message.data?.requires_ack &&
             message.data?.ws_id &&
             sendMessageRef.current
           ) {
-            console.log("📤 Sending connection acknowledgment");
             sendMessageRef.current({
               type: "connection_ack",
               data: {
@@ -720,12 +695,6 @@ export const useGameWebSocket = (
           break;
 
         case "roster_update":
-          console.log(
-            "📋 Roster update received:",
-            message.data?.players?.length,
-            "players"
-          );
-
           if (message.data?.players && Array.isArray(message.data.players)) {
             const updatedPlayers = message.data.players.map((pl: any) => ({
               player_id: pl.player_id || pl.id,
@@ -751,6 +720,23 @@ export const useGameWebSocket = (
                     game_state: null,
                   }
             );
+          }
+          break;
+
+        case "game_status_update":
+          // Handle game status updates (player counts, question progress, etc.)
+          if (message.data) {
+            setGameState((prev) => {
+              if (!prev) return prev;
+
+              return {
+                ...prev,
+                game_state: {
+                  ...prev.game_state,
+                  ...message.data,
+                },
+              };
+            });
           }
           break;
 

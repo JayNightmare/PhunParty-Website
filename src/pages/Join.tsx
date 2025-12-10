@@ -71,16 +71,6 @@ export default function Join() {
 
   const stored = localStorage.getItem(`auth_user`);
 
-  console.log("[Join] Connection state:", {
-    isJoined,
-    myId,
-    nameTrigger,
-    name,
-    isConnected,
-    hasGameState: !!game_state,
-    hasCurrentQuestion: !!(game_state as any)?.currentQuestion,
-  });
-
   // WebSocket game controls for real-time interactions
   const wsGameControls = useWebSocketGameControls({
     sendMessage: sendMessage || (() => {}),
@@ -88,10 +78,7 @@ export default function Join() {
   });
 
   // Enhanced touch gestures for mobile
-  const {
-    attachGestures,
-    isRefreshing: gestureRefreshing,
-  } = useTouchGestures({
+  const { attachGestures, isRefreshing: gestureRefreshing } = useTouchGestures({
     onPullToRefresh: async () => {
       setIsRefreshing(true);
       try {
@@ -126,17 +113,6 @@ export default function Join() {
   const hasStarted =
     !!game_status?.isstarted || !!(game_state as any)?.isStarted;
 
-  // Debug logging for game start detection
-  useEffect(() => {
-    console.log("[Join] Game start status:", {
-      hasStarted,
-      restIsStarted: game_status?.isstarted,
-      wsIsStarted: (game_state as any)?.isStarted,
-      wsIsActive: (game_state as any)?.isActive,
-      game_state_keys: game_state ? Object.keys(game_state) : null,
-    });
-  }, [hasStarted, game_status?.isstarted, game_state]);
-
   useEffect(() => {
     // Prefer WebSocket question for real-time updates.
     // Important: don't gate WS updates behind `hasStarted`.
@@ -144,32 +120,11 @@ export default function Join() {
     // which would otherwise hide the question from users.
     const wsQ = (game_state as any)?.currentQuestion;
 
-    console.log("[Join] 🔍 Question update check:", {
-      hasWsQ: !!wsQ,
-      wsQuestionId: wsQ?.question_id || wsQ?.id,
-      wsQuestionText: wsQ?.question || wsQ?.prompt,
-      wsDisplayOptions: wsQ?.display_options,
-      wsOptions: wsQ?.options,
-      wsUiMode: wsQ?.ui_mode,
-      wsDifficulty: wsQ?.difficulty,
-      hasStarted,
-      isConnected,
-      game_state_keys: game_state ? Object.keys(game_state) : null,
-    });
-
     if (wsQ) {
-      console.log(
-        "[Join] 📝 Processing WebSocket question:",
-        JSON.stringify(wsQ, null, 2)
-      );
-
       const prompt = wsQ.question || wsQ.prompt || "";
       const id = wsQ.question_id || wsQ.id || prompt;
       const displayOptions: string[] = wsQ.display_options || wsQ.options || [];
       const uiMode = wsQ.ui_mode; // Get ui_mode from backend
-
-      console.log("[Join] Extracted options:", displayOptions);
-      console.log("[Join] ui_mode:", uiMode);
 
       const mcqOptions =
         Array.isArray(displayOptions) && displayOptions.length > 0
@@ -211,7 +166,6 @@ export default function Join() {
         difficulty,
       };
 
-      console.log("[Join] Setting question:", finalQuestion);
       setQuestion(finalQuestion);
       return;
     }
@@ -263,7 +217,6 @@ export default function Join() {
           const playerId = playerData.player_id || playerData.id;
           if (playerId) {
             setMyId(playerId);
-            console.log("[Join] Loaded player ID from storage:", playerId);
           } else {
             console.warn(
               "[Join] No player_id found in stored data:",
@@ -276,9 +229,6 @@ export default function Join() {
           console.error("Failed to parse stored player data:", error);
         }
       }
-
-      // debug log to check the `stored` object
-      console.log("Stored player data:", stored);
     }
   }, [sessionId]);
 
@@ -300,7 +250,6 @@ export default function Join() {
       }
 
       const player = JSON.parse(stored) as Player;
-      console.log("Joining as player:", player);
 
       const playerData = {
         session_code: sessionId,

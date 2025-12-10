@@ -71,11 +71,6 @@ export default function SessionWaitingRoom() {
       return;
     }
 
-    console.log(
-      `[SessionWaitingRoom] Starting game with ${wsPlayerCount} confirmed player(s)`,
-      connectedPlayers
-    );
-
     setIsStarting(true);
     try {
       // Do NOT start the backend game yet; navigate to intro screen first
@@ -149,30 +144,6 @@ export default function SessionWaitingRoom() {
               </div>
             ) : (
               <div className="space-y-3">
-                {/* Only show status when players are syncing or confirmed */}
-                {connectedPlayers.length > 0 &&
-                  game_status?.player_response_counts?.total !==
-                    connectedPlayers.length && (
-                    <div className="p-3 bg-tea-900/20 rounded-xl text-sm text-tea-400 border border-tea-500/20 flex items-center gap-2">
-                      <LoadingSpinner size="sm" color="primary" />
-                      <div className="flex-1">
-                        <div className="font-medium">Syncing players...</div>
-                        <div className="text-xs text-stone-400">
-                          {connectedPlayers.length}/
-                          {game_status?.player_response_counts?.total || 0}{" "}
-                          ready
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                {connectedPlayers.length > 0 &&
-                  game_status?.player_response_counts?.total ===
-                    connectedPlayers.length && (
-                    <div className="p-3 bg-tea-900/20 rounded-xl text-sm text-tea-400 border border-tea-500/20">
-                      ✓ All {connectedPlayers.length} player(s) confirmed and
-                      ready!
-                    </div>
-                  )}
                 <LoadingButton
                   onClick={handleStart}
                   isLoading={isStarting}
@@ -206,24 +177,6 @@ export default function SessionWaitingRoom() {
               )}
             </div>
           ))}
-
-          {/* Show loading placeholder for players that are joining but not yet in connectedPlayers */}
-          {game_status &&
-            game_status.player_response_counts?.total >
-              connectedPlayers.length &&
-            Array.from({
-              length:
-                game_status.player_response_counts.total -
-                connectedPlayers.length,
-            }).map((_, index) => (
-              <div
-                key={`loading-${index}`}
-                className="px-4 py-2 bg-ink-800 rounded-xl flex items-center gap-3 border border-tea-500/30"
-              >
-                <LoadingSpinner size="sm" color="primary" />
-                <span className="text-stone-400 text-sm">Joining...</span>
-              </div>
-            ))}
 
           {connectedPlayers.length === 0 &&
             game_status?.player_response_counts?.total === 0 && (

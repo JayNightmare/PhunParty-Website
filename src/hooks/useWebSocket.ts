@@ -39,7 +39,8 @@ export type WebSocketMessageType =
   | "qa_update"
   | "qa_question"
   | "qa_answer_submitted"
-  | "broadcast_state";
+  | "broadcast_state"
+  | "game_status_update";
 
 export interface PhunPartyWebSocketMessage {
   type: WebSocketMessageType;
@@ -167,7 +168,6 @@ const useWebSocket = (
                 wsRef.current.readyState === WebSocket.OPEN
               ) {
                 wsRef.current.send(JSON.stringify(announceMessage));
-                console.log("📢 Sent player_announce for", playerName);
               }
             }, 150);
           } catch (e) {
