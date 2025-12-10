@@ -11,6 +11,8 @@ export interface WebSocketMessage {
 export type WebSocketMessageType =
   | "initial_state"
   | "connection_established"
+  | "connection_ack"
+  | "roster_update"
   | "ping"
   | "pong"
   | "player_joined"
@@ -37,7 +39,8 @@ export type WebSocketMessageType =
   | "qa_update"
   | "qa_question"
   | "qa_answer_submitted"
-  | "broadcast_state";
+  | "broadcast_state"
+  | "game_status_update";
 
 export interface PhunPartyWebSocketMessage {
   type: WebSocketMessageType;
@@ -144,6 +147,34 @@ const useWebSocket = (
         setConnectionState("connected");
         reconnectCountRef.current = 0;
         onConnect?.();
+
+        // For mobile clients, send an explicit "announce" message after connection
+        // to ensure the backend broadcasts player_joined to all web clients
+        if (clientType === "mobile" && playerId && playerName) {
+          try {
+            const announceMessage = {
+              type: "player_announce",
+              data: {
+                player_id: playerId,
+                player_name: playerName,
+                player_photo: playerPhoto,
+                timestamp: new Date().toISOString(),
+              },
+            };
+            // Small delay to ensure backend connection handler completes
+            setTimeout(() => {
+              if (
+                wsRef.current &&
+                wsRef.current.readyState === WebSocket.OPEN
+              ) {
+                wsRef.current.send(JSON.stringify(announceMessage));
+              }
+            }, 150);
+          } catch (e) {
+            console.warn("Failed to send player_announce:", e);
+          }
+        }
+
         // start heartbeat here in case backend doesn't send an initial message
         if (heartbeatIntervalRef.current) {
           clearInterval(heartbeatIntervalRef.current);
