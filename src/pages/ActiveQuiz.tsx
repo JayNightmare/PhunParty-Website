@@ -719,23 +719,6 @@ export default function ActiveQuiz() {
                 {question?.prompt || "Loading question..."}
               </div>
 
-              {(() => {
-                const hasQuestion = !!question;
-                const questionType = question?.type;
-                const hasOptions = !!question?.options;
-                const optionsLength = question?.options?.length;
-                const optionsArray = question?.options;
-                    willRenderMCQ: !!(
-                      question?.type === "mcq" && question.options
-                    ),
-                    introMode,
-                    countdown,
-                    gameState: game_state,
-                  }
-                );
-                return null;
-              })()}
-
               {question?.type === "mcq" && question.options && (
                 <div className="grid grid-cols-2 gap-3">
                   {question.options.map((o: MCQOption) => (
