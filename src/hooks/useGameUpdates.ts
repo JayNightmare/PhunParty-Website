@@ -46,6 +46,8 @@ export interface UseGameUpdatesReturn {
   pressBuzzer: () => void;
   // Raw message sending (for WebSocket communication)
   sendMessage?: (message: any) => void;
+  // Request current roster from server
+  requestRoster?: () => void;
 }
 
 const useGameUpdates = ({
@@ -207,6 +209,7 @@ const useGameUpdates = ({
     submitAnswer,
     pressBuzzer,
     sendMessage,
+    requestRoster,
   } = useGameWebSocket({
     sessionCode,
     clientType,
@@ -296,6 +299,7 @@ const useGameUpdates = ({
     submitAnswer,
     pressBuzzer,
     sendMessage: enableWebSocket ? sendMessage : undefined,
+    requestRoster: enableWebSocket ? requestRoster : undefined,
   };
 };
 

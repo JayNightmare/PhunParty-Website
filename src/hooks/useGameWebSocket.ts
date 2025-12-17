@@ -77,6 +77,9 @@ export interface UseGameWebSocketReturn {
 
   // Raw message sending (for custom messages)
   sendMessage: (message: PhunPartyWebSocketMessage) => void;
+
+  // Request current roster from server
+  requestRoster: () => void;
 }
 
 export const useGameWebSocket = (
@@ -422,6 +425,16 @@ export const useGameWebSocket = (
             )
               ? message.data.connected_players
               : [];
+
+            if (import.meta.env.DEV) {
+              console.debug(
+                `[WS] Initial state received - ${incomingPlayers.length} players:`,
+                incomingPlayers
+                  .map((p: any) => p.player_name || p.player_id)
+                  .join(", ")
+              );
+            }
+
             setGameState((prev) => {
               const mergedPlayers = prev
                 ? mergePlayers(prev.connectedPlayers, incomingPlayers)
@@ -450,6 +463,12 @@ export const useGameWebSocket = (
               player_photo: message.data.player_photo,
               connected_at: message.data.timestamp,
             };
+
+            if (import.meta.env.DEV) {
+              console.debug(
+                `[WS] Player joined: ${player.player_name} (${player.player_id})`
+              );
+            }
 
             setGameState((prev) => {
               const base: GameState =
@@ -695,6 +714,7 @@ export const useGameWebSocket = (
           break;
 
         case "roster_update":
+          // CRITICAL: roster_update is AUTHORITATIVE - replace entire player list
           if (message.data?.players && Array.isArray(message.data.players)) {
             const updatedPlayers = message.data.players.map((pl: any) => ({
               player_id: pl.player_id || pl.id,
@@ -704,6 +724,13 @@ export const useGameWebSocket = (
               answered_current: pl.answered_current || false,
               score: pl.score,
             })) as Player[];
+
+            if (import.meta.env.DEV) {
+              console.debug(
+                `[roster_update] Received ${updatedPlayers.length} players:`,
+                updatedPlayers.map((p) => p.player_name).join(", ")
+              );
+            }
 
             setGameState((prev) =>
               prev
@@ -792,6 +819,13 @@ export const useGameWebSocket = (
     }
   }, [isConnected, getSessionStats]);
 
+  // Request current roster function
+  const requestRoster = useCallback(() => {
+    if (isConnected) {
+      sendMessage({ type: "request_roster", data: {} });
+    }
+  }, [isConnected, sendMessage]);
+
   return {
     isConnected,
     isReconnecting,
@@ -805,6 +839,7 @@ export const useGameWebSocket = (
     connect,
     disconnect,
     sendMessage,
+    requestRoster,
   };
 };
 

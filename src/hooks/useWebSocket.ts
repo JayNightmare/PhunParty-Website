@@ -13,6 +13,7 @@ export type WebSocketMessageType =
   | "connection_established"
   | "connection_ack"
   | "roster_update"
+  | "request_roster"
   | "ping"
   | "pong"
   | "player_joined"
