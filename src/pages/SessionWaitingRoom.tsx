@@ -15,17 +15,37 @@ export default function SessionWaitingRoom() {
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [isStarting, setIsStarting] = useState(false);
+  const [isLoadingRoster, setIsLoadingRoster] = useState(true);
 
   const {
     game_status,
     isConnected,
     connectedPlayers,
     startGame: wsStartGame,
+    requestRoster,
   } = useGameUpdates({
     sessionCode: sessionCode || "",
     pollInterval: 3000,
     enableWebSocket: true,
   });
+
+  // Request roster when WebSocket connects
+  useEffect(() => {
+    if (isConnected && requestRoster) {
+      // Give the server a moment to prepare
+      const timer = setTimeout(() => {
+        requestRoster();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isConnected, requestRoster]);
+
+  // Mark roster as loaded when we receive players
+  useEffect(() => {
+    if (connectedPlayers.length > 0 || (isConnected && game_status)) {
+      setIsLoadingRoster(false);
+    }
+  }, [connectedPlayers.length, isConnected, game_status]);
 
   // We intentionally do NOT auto-redirect anymore so the host can wait even if backend marks session active.
 
@@ -157,33 +177,64 @@ export default function SessionWaitingRoom() {
             )}
           </div>
           <div className="w-56 self-start">
-            <QR value={joinUrl} />
+            {isConnected ? (
+              <QR value={joinUrl} />
+            ) : (
+              <div className="w-56 h-56 bg-ink-800 rounded-xl flex items-center justify-center">
+                <div className="text-center space-y-2">
+                  <LoadingSpinner size="md" />
+                  <div className="text-sm text-stone-400">
+                    Preparing session...
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </Card>
       <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Players Joined</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Players Joined</h3>
+          {isConnected && requestRoster && (
+            <button
+              onClick={() => requestRoster()}
+              className="text-xs text-tea-400 hover:text-tea-300 transition-colors"
+              title="Refresh player list"
+            >
+              🔄 Refresh
+            </button>
+          )}
+        </div>
 
         <div className="space-y-2 max-h-80 overflow-y-auto">
-          {/* Show actual connected players */}
-          {connectedPlayers.map((p) => (
-            <div
-              key={p.player_id}
-              className="px-4 py-2 bg-ink-800 rounded-xl flex justify-between items-center"
-            >
-              <span>{p.player_name || p.player_id}</span>
-              {p.connected_at && (
-                <span className="text-xs text-tea-400">✓ Ready</span>
-              )}
+          {isLoadingRoster ? (
+            <div className="text-stone-400 text-sm text-center py-6">
+              <LoadingSpinner size="sm" className="mx-auto mb-2" />
+              <div>Waiting for players to join...</div>
             </div>
-          ))}
+          ) : (
+            <>
+              {/* Show actual connected players */}
+              {connectedPlayers.map((p) => (
+                <div
+                  key={p.player_id}
+                  className="px-4 py-2 bg-ink-800 rounded-xl flex justify-between items-center"
+                >
+                  <span>{p.player_name || p.player_id}</span>
+                  {p.connected_at && (
+                    <span className="text-xs text-tea-400">✓ Ready</span>
+                  )}
+                </div>
+              ))}
 
-          {connectedPlayers.length === 0 &&
-            game_status?.player_response_counts?.total === 0 && (
-              <div className="text-stone-500 text-sm text-center py-6">
-                No players yet...
-              </div>
-            )}
+              {connectedPlayers.length === 0 &&
+                game_status?.player_response_counts?.total === 0 && (
+                  <div className="text-stone-500 text-sm text-center py-6">
+                    No players yet... Share the QR code to get started!
+                  </div>
+                )}
+            </>
+          )}
         </div>
       </Card>
     </main>
