@@ -72,7 +72,6 @@ export const createWebSocketGameControls = (ws: GameControlWebSocket) => {
         ws.sendMessage({
             type: "submit_answer",
             data: {
-                player_id: playerId,
                 question_id: questionId,
                 answer: answer,
             },

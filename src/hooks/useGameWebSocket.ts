@@ -10,9 +10,25 @@ export interface GameState {
   gameType: "trivia" | "buzzer";
   isActive: boolean;
   isStarted?: boolean; // Set to true when game_started message is received
+  phase?:
+    | "lobby"
+    | "intro_audio"
+    | "countdown_pending"
+    | "countdown"
+    | "question"
+    | "ended"
+    | string;
   currentQuestion: any | null;
+  preloadedQuestion?: any | null;
+  countdown?: {
+    startAt?: string;
+    durationMs?: number;
+    questionStartAt?: string;
+  } | null;
   connectedPlayers: Player[];
   game_state: any | null;
+  serverOffsetMs?: number;
+  finalScores?: any;
 }
 
 export interface Player {
@@ -110,6 +126,30 @@ export const useGameWebSocket = (
   const sendMessageRef = useRef<
     ((message: PhunPartyWebSocketMessage) => void) | null
   >(null);
+  const serverOffsetMsRef = useRef(0);
+  const scheduledQuestionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const updateServerOffset = useCallback((serverTimeMs?: number) => {
+    if (typeof serverTimeMs !== "number" || Number.isNaN(serverTimeMs)) return;
+    serverOffsetMsRef.current = serverTimeMs - Date.now();
+  }, []);
+
+  const estimatedServerNowMs = useCallback(
+    () => Date.now() + serverOffsetMsRef.current,
+    [],
+  );
+
+  const scheduleAtServerTime = useCallback(
+    (startAtIso: string | undefined, callback: () => void) => {
+      const startAtMs = startAtIso ? Date.parse(startAtIso) : NaN;
+      const delayMs = Number.isNaN(startAtMs)
+        ? 0
+        : Math.max(0, startAtMs - estimatedServerNowMs());
+
+      return setTimeout(callback, delayMs);
+    },
+    [estimatedServerNowMs],
+  );
 
   // Build WebSocket URL based on environment
   const buildWebSocketUrl = useCallback(() => {
@@ -218,6 +258,91 @@ export const useGameWebSocket = (
               incomingPlayer.player_name || existingPlayer.player_name,
           };
         });
+      };
+
+      const normalizePlayers = (rawPlayers: any[] | undefined): Player[] => {
+        if (!Array.isArray(rawPlayers)) return [];
+
+        return rawPlayers.map((pl: any) => ({
+          player_id: pl.player_id || pl.id,
+          player_name: pl.player_name || pl.name,
+          player_photo: pl.player_photo,
+          connected_at: pl.connected_at || pl.timestamp,
+          answered_current: pl.answered_current ?? pl.answered ?? false,
+          score: pl.score,
+        })) as Player[];
+      };
+
+      const applyAuthoritativeState = (raw: any) => {
+        if (!raw) return;
+
+        const state = raw.authoritative_state ?? raw;
+        updateServerOffset(state.server_time_ms ?? raw.server_time_ms);
+
+        const phase =
+          state.phase ??
+          (state.game_state === "ended"
+            ? "ended"
+            : state.game_state === "active"
+              ? "question"
+              : "lobby");
+        const incomingPlayers = normalizePlayers(
+          raw.connected_players ?? state.connected_players ?? state.players,
+        );
+        const normalizedQuestion =
+          phase === "question"
+            ? extractQuestion(state.current_question ?? state.question)
+            : null;
+
+        setGameState((prev) => {
+          const base: GameState =
+            prev ||
+            ({
+              sessionCode: state.session_code || sessionCode,
+              gameType: state.game_type || "trivia",
+              isActive: phase !== "lobby" && phase !== "ended",
+              currentQuestion: null,
+              connectedPlayers: [],
+              game_state: null,
+            } as GameState);
+
+          return {
+            ...base,
+            sessionCode: state.session_code || raw.session_code || sessionCode,
+            gameType: (state.game_type || base.gameType || "trivia") as
+              | "trivia"
+              | "buzzer",
+            phase,
+            isActive: phase !== "lobby" && phase !== "ended",
+            isStarted: phase === "question",
+            currentQuestion:
+              phase === "question"
+                ? mergeQuestion(base.currentQuestion, normalizedQuestion)
+                : null,
+            countdown:
+              phase === "countdown"
+                ? {
+                    startAt: state.start_at,
+                    durationMs: state.duration_ms,
+                    questionStartAt: state.question_start_at,
+                  }
+                : base.countdown ?? null,
+            connectedPlayers:
+              incomingPlayers.length > 0
+                ? mergePlayers(base.connectedPlayers, incomingPlayers)
+                : base.connectedPlayers,
+            game_state: {
+              ...(base.game_state || {}),
+              ...state,
+            },
+            serverOffsetMs: serverOffsetMsRef.current,
+            finalScores: state.final_scores ?? base.finalScores,
+          };
+        });
+
+        if (phase === "question" && normalizedQuestion) {
+          onQuestionStarted?.(normalizedQuestion);
+        }
       };
 
       switch (message.type) {
@@ -416,43 +541,11 @@ export const useGameWebSocket = (
           break;
         }
         case "initial_state":
-          if (message.data) {
-            const normalizedQuestion = extractQuestion(
-              message.data.current_question
-            );
-            const incomingPlayers = Array.isArray(
-              message.data.connected_players
-            )
-              ? message.data.connected_players
-              : [];
+          applyAuthoritativeState(message.data);
+          break;
 
-            if (import.meta.env.DEV) {
-              console.debug(
-                `[WS] Initial state received - ${incomingPlayers.length} players:`,
-                incomingPlayers
-                  .map((p: any) => p.player_name || p.player_id)
-                  .join(", ")
-              );
-            }
-
-            setGameState((prev) => {
-              const mergedPlayers = prev
-                ? mergePlayers(prev.connectedPlayers, incomingPlayers)
-                : incomingPlayers;
-              const mergedQuestion = prev
-                ? mergeQuestion(prev.currentQuestion, normalizedQuestion)
-                : normalizedQuestion;
-
-              return {
-                sessionCode: message.data.session_code || sessionCode,
-                gameType: message.data.game_state?.game_type || "trivia",
-                isActive: message.data.game_state?.is_active || false,
-                currentQuestion: mergedQuestion,
-                connectedPlayers: mergedPlayers,
-                game_state: message.data.connection_stats || null,
-              };
-            });
-          }
+        case "sync_state":
+          applyAuthoritativeState(message.data);
           break;
 
         case "player_joined":
@@ -540,8 +633,10 @@ export const useGameWebSocket = (
                 isActive: true,
                 currentQuestion: null,
                 connectedPlayers: [],
-                game_state: null,
-                isStarted: true,
+                game_state: message.data?.game_state ?? null,
+                phase: message.data?.phase ?? "intro_audio",
+                isStarted: false,
+                serverOffsetMs: serverOffsetMsRef.current,
               } as GameState;
             }
 
@@ -564,31 +659,132 @@ export const useGameWebSocket = (
               ).map((p) => ({ ...p, answered_current: false }));
             }
 
-            // Handle question if provided (backend now sends currentQuestion in game_started)
-            let currentQuestion = prev.currentQuestion;
-            const questionData =
-              message.data?.currentQuestion || message.data?.current_question;
-
-            if (questionData) {
-              const normalizedQuestion = extractQuestion(questionData);
-              currentQuestion = mergeQuestion(
-                prev.currentQuestion,
-                normalizedQuestion
-              );
-            }
-
             return {
               ...prev,
+              phase: message.data?.phase ?? "intro_audio",
               isActive: true,
-              currentQuestion,
+              currentQuestion: null,
               connectedPlayers,
-              isStarted: true,
+              isStarted: false,
+              game_state: message.data?.game_state ?? prev.game_state,
+              serverOffsetMs: serverOffsetMsRef.current,
             } as any;
           });
 
-          // Only call onGameStarted - do NOT call onQuestionStarted yet
-          // The question will be shown when question_started arrives AFTER the intro
           onGameStarted?.();
+          break;
+
+        case "intro_started":
+          updateServerOffset(message.data?.server_time_ms);
+          setGameState((prev) => {
+            const base: GameState =
+              prev ||
+              ({
+                sessionCode,
+                gameType: "trivia",
+                isActive: true,
+                currentQuestion: null,
+                connectedPlayers: [],
+                game_state: null,
+              } as GameState);
+
+            return {
+              ...base,
+              phase: "intro_audio",
+              isActive: true,
+              isStarted: false,
+              currentQuestion: null,
+              game_state: {
+                ...(base.game_state || {}),
+                ...message.data,
+              },
+              serverOffsetMs: serverOffsetMsRef.current,
+            };
+          });
+          break;
+
+        case "intro_skipped":
+          updateServerOffset(message.data?.server_time_ms);
+          setGameState((prev) => {
+            const base: GameState =
+              prev ||
+              ({
+                sessionCode,
+                gameType: "trivia",
+                isActive: true,
+                currentQuestion: null,
+                connectedPlayers: [],
+                game_state: null,
+              } as GameState);
+
+            return {
+              ...base,
+              phase: "countdown_pending",
+              isActive: true,
+              isStarted: false,
+              currentQuestion: null,
+              game_state: {
+                ...(base.game_state || {}),
+                ...message.data,
+              },
+              serverOffsetMs: serverOffsetMsRef.current,
+            };
+          });
+          break;
+
+        case "countdown_started":
+          updateServerOffset(message.data?.server_time_ms);
+          setGameState((prev) => {
+            const base: GameState =
+              prev ||
+              ({
+                sessionCode,
+                gameType: "trivia",
+                isActive: true,
+                currentQuestion: null,
+                connectedPlayers: [],
+                game_state: null,
+              } as GameState);
+
+            return {
+              ...base,
+              phase: "countdown",
+              isActive: true,
+              isStarted: false,
+              currentQuestion: null,
+              countdown: {
+                startAt: message.data?.start_at,
+                durationMs: message.data?.duration_ms,
+                questionStartAt: message.data?.question_start_at,
+              },
+              game_state: {
+                ...(base.game_state || {}),
+                ...message.data,
+              },
+              serverOffsetMs: serverOffsetMsRef.current,
+            };
+          });
+          onUIUpdate?.({ phase: "countdown", countdown: message.data });
+          break;
+
+        case "preload_question":
+          setGameState((prev) => {
+            const base: GameState =
+              prev ||
+              ({
+                sessionCode,
+                gameType: "trivia",
+                isActive: true,
+                currentQuestion: null,
+                connectedPlayers: [],
+                game_state: null,
+              } as GameState);
+
+            return {
+              ...base,
+              preloadedQuestion: message.data,
+            };
+          });
           break;
 
         case "game_ended":
@@ -596,8 +792,10 @@ export const useGameWebSocket = (
             prev
               ? {
                   ...prev,
+                  phase: "ended",
                   isActive: false,
                   currentQuestion: null,
+                  finalScores: message.data?.final_scores,
                 }
               : null
           );
@@ -605,28 +803,50 @@ export const useGameWebSocket = (
           break;
 
         case "question_started":
-          setGameState((prev) => {
-            if (!prev) return null;
-            // Backend sends complete question object directly in message.data
-            // Don't extract nested fields - use it as-is
-            const normalized = message.data;
+          updateServerOffset(message.data?.server_time_ms);
+          if (scheduledQuestionTimeoutRef.current) {
+            clearTimeout(scheduledQuestionTimeoutRef.current);
+          }
+          scheduledQuestionTimeoutRef.current = scheduleAtServerTime(
+            message.data?.start_at,
+            () => {
+              setGameState((prev) => {
+                const base: GameState =
+                  prev ||
+                  ({
+                    sessionCode,
+                    gameType: "trivia",
+                    isActive: true,
+                    currentQuestion: null,
+                    connectedPlayers: [],
+                    game_state: null,
+                  } as GameState);
+                const normalized = message.data;
+                const mergedQuestion = mergeQuestion(
+                  base.currentQuestion,
+                  normalized,
+                );
 
-            const mergedQuestion = mergeQuestion(
-              prev.currentQuestion,
-              normalized
-            );
-
-            return {
-              ...prev,
-              isActive: true,
-              currentQuestion: mergedQuestion,
-              connectedPlayers: prev.connectedPlayers.map((p) => ({
-                ...p,
-                answered_current: false,
-              })),
-            };
-          });
-          onQuestionStarted?.(message.data);
+                return {
+                  ...base,
+                  phase: "question",
+                  isActive: true,
+                  isStarted: true,
+                  currentQuestion: mergedQuestion,
+                  connectedPlayers: base.connectedPlayers.map((p) => ({
+                    ...p,
+                    answered_current: false,
+                  })),
+                  game_state: {
+                    ...(base.game_state || {}),
+                    ...message.data,
+                  },
+                  serverOffsetMs: serverOffsetMsRef.current,
+                };
+              });
+              onQuestionStarted?.(message.data);
+            },
+          );
           break;
 
         case "player_answered":
@@ -693,24 +913,11 @@ export const useGameWebSocket = (
           break;
 
         case "pong":
-          // Heartbeat response - no action needed
+          updateServerOffset(message.serverTime ?? message.data?.serverTime);
           break;
 
         case "connection_established":
-          // Send acknowledgment back to server if required
-          if (
-            message.data?.requires_ack &&
-            message.data?.ws_id &&
-            sendMessageRef.current
-          ) {
-            sendMessageRef.current({
-              type: "connection_ack",
-              data: {
-                ws_id: message.data.ws_id,
-                timestamp: new Date().toISOString(),
-              },
-            });
-          }
+          updateServerOffset(message.data?.server_time_ms);
           break;
 
         case "roster_update":
@@ -784,6 +991,8 @@ export const useGameWebSocket = (
       onIncorrectAnswer,
       onUIUpdate,
       onErrorCallback,
+      updateServerOffset,
+      scheduleAtServerTime,
     ]
   );
 
@@ -811,6 +1020,14 @@ export const useGameWebSocket = (
 
   // Store sendMessage in ref so handleMessage can use it
   sendMessageRef.current = sendMessage;
+
+  useEffect(() => {
+    return () => {
+      if (scheduledQuestionTimeoutRef.current) {
+        clearTimeout(scheduledQuestionTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Request initial session stats when connected
   useEffect(() => {
