@@ -358,7 +358,12 @@ export const useGameWebSocket = (
               ...state,
             },
             serverOffsetMs: serverOffsetMsRef.current,
-            finalScores: state.final_scores ?? base.finalScores,
+            finalScores:
+              state.final_scores ??
+              state.finalScores ??
+              state.scores ??
+              base.finalScores ??
+              [],
           };
         });
 
@@ -881,7 +886,11 @@ export const useGameWebSocket = (
                   phase: "ended",
                   isActive: false,
                   currentQuestion: null,
-                  finalScores: message.data?.final_scores,
+                  finalScores:
+                    message.data?.final_scores ??
+                    message.data?.finalScores ??
+                    message.data?.scores ??
+                    [],
                 }
               : null,
           );
