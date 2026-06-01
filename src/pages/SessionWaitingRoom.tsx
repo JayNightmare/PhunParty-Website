@@ -88,6 +88,11 @@ export default function SessionWaitingRoom() {
   const handleStart = async () => {
     if (!sessionCode) return;
 
+    if (!isConnected) {
+      showError("Host socket is not connected yet. Please wait a moment.");
+      return;
+    }
+
     // Validate that we have players before starting
     if (connectedPlayers.length === 0) {
       showError(
@@ -192,7 +197,7 @@ export default function SessionWaitingRoom() {
                   isLoading={isStarting}
                   loadingText="Starting..."
                   className="px-6 py-3"
-                  disabled={connectedPlayers.length === 0}
+                  disabled={connectedPlayers.length === 0 || !isConnected}
                 >
                   Start Game
                 </LoadingButton>

@@ -1,19 +1,16 @@
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
-import { useState, useMemo, useEffect, useRef } from "react";
-import { Session, Question, MCQOption } from "@/types";
+import { useState, useEffect, useRef } from "react";
+import { Question, MCQOption } from "@/types";
 import { Player } from "@/hooks/useGameWebSocket";
 
 import Card from "@/components/Card";
 import {
-  getSessionStatus,
   GameStatusResponse,
   getCurrentQuestion,
   pauseGame,
   resumeGame,
-  nextQuestion,
   previousQuestion,
   endGame,
-  startGame as startGameApi,
 } from "@/lib/api";
 import Timer from "@/components/Timer";
 import useGameUpdates from "@/hooks/useGameUpdates";
@@ -43,7 +40,8 @@ export default function ActiveQuiz() {
   const [introMode, setIntroMode] = useState(false); // whether we're in tutorial phase
   const [countdown, setCountdown] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const introCompleteSentRef = useRef(false);
   const hasNavigatedToStats = useRef(false);
   // Timer duration based on difficulty – must be declared before any conditional returns
   const [timerMs, setTimerMs] = useState<number>(30000);
@@ -59,8 +57,6 @@ export default function ActiveQuiz() {
     refetch,
     connectedPlayers,
     sendMessage,
-    submitAnswer,
-    pressBuzzer,
   } = useGameUpdates({
     sessionCode: sessionId || "",
     enableWebSocket: true,
@@ -73,6 +69,14 @@ export default function ActiveQuiz() {
     isConnected: isConnected,
   });
 
+  const serverPhase = (wsGameState as any)?.phase as string | undefined;
+  const serverCountdown = (wsGameState as any)?.countdown;
+  const serverOffsetMs = (wsGameState as any)?.serverOffsetMs || 0;
+  const hasProtocolState = Boolean(serverPhase);
+  const questionIsVisible = hasProtocolState
+    ? serverPhase === "question"
+    : !!game_status?.isstarted;
+
   // Touch gestures for swipe navigation and pull-to-refresh
   const { attachGestures, isRefreshing: gestureRefreshing } = useTouchGestures({
     onSwipeLeft: async () => {
@@ -84,8 +88,8 @@ export default function ActiveQuiz() {
           (game_status.total_questions || 1) - 1
       ) {
         try {
-          await nextQuestion({ session_code: sessionId });
-          showSuccess("Moved to next question");
+          wsGameControls.nextQuestion();
+          showSuccess("Moving to next question...");
         } catch (err) {
           showError("Failed to move to next question");
         }
@@ -140,130 +144,122 @@ export default function ActiveQuiz() {
     }
   }, [location.search]);
 
-  // Handle intro audio playback
   useEffect(() => {
-    if (!introMode) return;
-    // Only play once
-    if (!audioRef.current) {
-      const audio = new Audio("/audio/tutorial_voiceline1.mp3");
-      audioRef.current = audio;
-      audio.play().catch((err) => {
-        console.warn(
-          "Intro audio failed to autoplay, waiting for user interaction.",
-          err,
-        );
-      });
-      audio.addEventListener("ended", () => {
-        // Start 3 second countdown, then start actual game start (send isstarted)
-        setCountdown(3);
-        // Do NOT advance questions here; we'll start the game after countdown completes
-      });
-    }
-  }, [introMode]);
+    if (!serverPhase) return;
 
-  // Countdown logic after audio ends
-  useEffect(() => {
-    if (countdown === null) return;
-    if (countdown === 0) {
-      // Signal backend game officially started AFTER tutorial with isstarted flag
-      (async () => {
-        try {
-          if (sessionId) {
-            // CRITICAL: Verify all players are synced before starting
-            // This prevents players from being stuck in lobby or missing from leaderboard
-
-            // Wait a moment to ensure WebSocket state is fully synced
-            await new Promise((resolve) => setTimeout(resolve, 500));
-
-            // Refetch to get the latest player count from backend
-            await refetch();
-            const backendPlayerCount =
-              game_status?.player_response_counts?.total || 0;
-            const wsPlayerCount = connectedPlayers.length;
-
-            // If there's a mismatch, wait a bit longer for sync
-            if (backendPlayerCount > wsPlayerCount && backendPlayerCount > 0) {
-              showError("Ensuring all players are ready...");
-              await new Promise((resolve) => setTimeout(resolve, 1500));
-            }
-
-            // Re-check after delay
-            const finalPlayerCount = connectedPlayers.length;
-
-            if (finalPlayerCount === 0) {
-              showError(
-                "No players detected. Please ensure players have joined before starting.",
-              );
-              setIntroMode(false);
-              setCountdown(null);
-              return;
-            }
-
-            // Start game after tutorial intro completes
-            await startGameApi({ session_code: sessionId });
-
-            // Explicitly set game state to active immediately
-            setGameState("active");
-
-            // Exit intro mode and reset countdown so WebSocket questions can be processed
-            setIntroMode(false);
-            setCountdown(null);
-
-            // Send synchronization pulse to all clients via WebSocket
-            // This ensures mobile devices are ready to receive the question
-            if (sendMessage && isConnected) {
-              sendMessage({
-                type: "countdown_complete",
-                data: {
-                  session_code: sessionId,
-                  ready_for_question: true,
-                  player_count: finalPlayerCount,
-                  timestamp: new Date().toISOString(),
-                },
-              });
-            }
-
-            // CRITICAL: Trigger REST refetch to pull the current question
-            // This is what makes the timer work - do it immediately after game start
-            await refetch();
-
-            // Give a moment for data to propagate through all state updates
-            await new Promise((resolve) => setTimeout(resolve, 200));
-
-            showSuccess(`Game started with ${finalPlayerCount} player(s)`);
-          }
-        } catch (e) {
-          console.warn("Failed to start game after intro", e);
-          showError("Failed to start game. Please try again.");
-          setIntroMode(false);
-          setCountdown(null);
-        }
-      })();
+    if (
+      serverPhase === "intro_audio" ||
+      serverPhase === "countdown_pending" ||
+      serverPhase === "countdown"
+    ) {
+      setIntroMode(true);
       return;
     }
-    countdownRef.current && clearTimeout(countdownRef.current);
-    countdownRef.current = setTimeout(
-      () => setCountdown((c) => (c ? c - 1 : 0)),
-      1000,
-    );
-    return () => {
-      if (countdownRef.current) clearTimeout(countdownRef.current);
+
+    setIntroMode(false);
+  }, [serverPhase]);
+
+  const sendIntroComplete = () => {
+    if (introCompleteSentRef.current || !sendMessage || !isConnected) return;
+
+    introCompleteSentRef.current = true;
+    const durationMs = audioRef.current?.duration
+      ? Math.round(audioRef.current.duration * 1000)
+      : 3000;
+
+    sendMessage({
+      type: "intro_complete",
+      data: {
+        duration_ms: durationMs,
+      },
+    });
+  };
+
+  // Handle intro audio playback only when the backend starts the intro phase.
+  useEffect(() => {
+    if (serverPhase !== "intro_audio") return;
+
+    introCompleteSentRef.current = false;
+
+    let audio = audioRef.current;
+
+    if (!audio) {
+      audio = new Audio("/audio/tutorial_voiceline1.mp3");
+      audioRef.current = audio;
+    }
+
+    audio.currentTime = 0;
+
+    audio.onended = () => {
+      sendIntroComplete();
     };
-  }, [countdown, sessionId, connectedPlayers, refetch, showError, showSuccess]);
+
+    audio.play().catch((err) => {
+      console.warn(
+        "Intro audio failed to autoplay, waiting for user interaction.",
+        err,
+      );
+    });
+
+    return () => {
+      audio.onended = null;
+    };
+  }, [serverPhase, sendIntroComplete]);
+
+  // Countdown display follows the backend's question_start_at timestamp.
+  useEffect(() => {
+    if (serverPhase !== "countdown" || !serverCountdown?.questionStartAt) {
+      setCountdown(null);
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+      return;
+    }
+
+    const updateCountdown = () => {
+      const remainingMs = Math.max(
+        0,
+        Date.parse(serverCountdown.questionStartAt) -
+          (Date.now() + serverOffsetMs),
+      );
+      setCountdown(Math.ceil(remainingMs / 1000));
+    };
+
+    updateCountdown();
+    countdownRef.current = setInterval(updateCountdown, 200);
+
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [serverPhase, serverCountdown?.questionStartAt, serverOffsetMs]);
 
   // Process game status updates
   useEffect(() => {
     if (!game_status) return;
 
     // Determine game state
-    if (introMode) {
-      // During intro audio: game is "waiting"
-      // Once the audio finishes we start a countdown (countdown !== null). At that moment mark game "active".
-      if (countdown !== null) {
-        setGameState("active");
-      } else {
-        setGameState("waiting");
+    if (serverPhase) {
+      switch (serverPhase) {
+        case "ended":
+          setGameState("ended");
+          break;
+        case "question":
+        case "countdown":
+        case "countdown_pending":
+          setGameState("active");
+          break;
+        case "intro_audio":
+        case "lobby":
+        default:
+          setGameState("waiting");
+          break;
       }
+    } else if (introMode) {
+      setGameState(countdown !== null ? "active" : "waiting");
     } else if (game_status.game_state) {
       // Map API state to component state
       switch (game_status.game_state) {
@@ -286,13 +282,8 @@ export default function ActiveQuiz() {
 
     // Prefer WebSocket currentQuestion when available
     const wsQ = (wsGameState as any)?.currentQuestion;
-    // Check BOTH REST API isstarted AND WebSocket isStarted for faster response
-    const gameHasStarted =
-      game_status?.isstarted || (wsGameState as any)?.isStarted;
 
-    // Process WebSocket question immediately when game starts
-    // This ensures MCQ options appear right away, not after countdown
-    const shouldProcessWSQuestion = wsQ && gameHasStarted;
+    const shouldProcessWSQuestion = wsQ && questionIsVisible;
 
     if (shouldProcessWSQuestion) {
       const prompt = wsQ.question || wsQ.prompt || "";
@@ -388,7 +379,7 @@ export default function ActiveQuiz() {
     } else {
       // Fallback to fetching current question via REST
       const fetchCurrentQuestion = async () => {
-        if (!sessionId || !gameHasStarted) {
+        if (!sessionId || !questionIsVisible) {
           setQuestion(null);
           return;
         }
@@ -454,7 +445,17 @@ export default function ActiveQuiz() {
       }
       setPlayers(playerList);
     }
-  }, [game_status, wsGameState, connectedPlayers]);
+  }, [
+    game_status,
+    wsGameState,
+    connectedPlayers,
+    serverPhase,
+    introMode,
+    countdown,
+    questionIsVisible,
+    sessionId,
+    navigate,
+  ]);
 
   // Automatically navigate to stats page when the game completes
   useEffect(() => {
@@ -496,15 +497,9 @@ export default function ActiveQuiz() {
   const handleNextQuestion = async () => {
     if (!sessionId) return;
     try {
-      // Try WebSocket first if connected
       wsGameControls.nextQuestion();
-      showSuccess("Moving to next question via WebSocket...");
-
-      // Also trigger a refetch to ensure we get the updated question
-      // This is a fallback in case the WebSocket doesn't broadcast the new question
-      setTimeout(async () => {
-        await refetch();
-      }, 500);
+      setQuestion(null);
+      showSuccess("Moving to next question...");
     } catch (error) {
       showError("Failed to go to next question");
     }
@@ -528,19 +523,18 @@ export default function ActiveQuiz() {
   const handleEndGame = async () => {
     if (!sessionId) return;
     try {
-      // Try WebSocket first if connected, fallback to HTTP API
-      // if (isConnected && wsGameControls) {
-      //     wsGameControls.endGame();
-      //     showSuccess("Ending game via WebSocket...");
-      // } else {
-      const response = await endGame({ session_code: sessionId });
-      if (response.success) {
-        setGameState("ended");
-        showSuccess("Game ended successfully");
-        await refetch();
-        navigate(`/stats/${sessionId}/`);
+      if (isConnected && wsGameControls) {
+        wsGameControls.endGame();
+        showSuccess("Ending game...");
+      } else {
+        const response = await endGame({ session_code: sessionId });
+        if (response.success) {
+          setGameState("ended");
+          showSuccess("Game ended successfully");
+          await refetch();
+          navigate(`/stats/${sessionId}/`);
+        }
       }
-      // }
     } catch (error) {
       showError("Failed to end game");
       setGameState("ended");
@@ -604,10 +598,15 @@ export default function ActiveQuiz() {
         <div className="text-center space-y-6">
           <h1 className="text-4xl font-bold tracking-wide">Get Ready!</h1>
           <p className="text-stone-300 max-w-md mx-auto">
-            Listen to the brief tutorial. The game will start automatically.
+            Listen to the brief tutorial. The game will start when the server is
+            ready.
           </p>
           {countdown !== null ? (
             <div className="text-6xl font-mono">{countdown}</div>
+          ) : serverPhase === "countdown_pending" ? (
+            <div className="animate-pulse text-tea-400">
+              Starting countdown...
+            </div>
           ) : (
             <div className="animate-pulse text-tea-400">
               Playing tutorial audio...
@@ -616,10 +615,17 @@ export default function ActiveQuiz() {
           <button
             type="button"
             onClick={() => {
-              // Allow manual skip
               audioRef.current?.pause();
-              // Start the same 3-second countdown path
-              setCountdown(3);
+              if (sendMessage && isConnected) {
+                sendMessage({
+                  type: "skip_intro",
+                  data: {
+                    duration_ms: audioRef.current?.duration
+                      ? Math.round(audioRef.current.duration * 1000)
+                      : 3000,
+                  },
+                });
+              }
             }}
             className="px-6 py-3 bg-tea-500 text-ink-900 rounded-xl font-semibold hover:bg-tea-400 transition"
           >

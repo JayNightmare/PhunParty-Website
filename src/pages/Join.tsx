@@ -1,12 +1,10 @@
-import { useMemo, useState, useRef, useEffect } from "react";
-import { Session, MCQOption, Question } from "@/types";
-import { Player } from "@/hooks/useGameWebSocket";
+import { useState, useRef, useEffect } from "react";
+import { MCQOption, Question } from "@/types";
 import { useParams } from "react-router-dom";
 import Card from "@/components/Card";
 import {
   joinGameSession,
   submitAnswer,
-  getSessionStatus,
   getCurrentQuestion,
   createPlayer,
   leaveGameSession,
@@ -18,7 +16,6 @@ import ConnectionIndicator from "@/components/ConnectionIndicator";
 import MobileAnswerSelector from "@/components/MobileAnswerSelector";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { useTouchGestures } from "@/hooks/useTouchGestures";
-import { useWebSocketGameControls } from "@/hooks/useWebSocketGameControls";
 
 export default function Join() {
   const { sessionId } = useParams();
@@ -32,6 +29,7 @@ export default function Join() {
   const [val, setVal] = useState("");
   const [joinLoading, setJoinLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [pendingRejoin, setPendingRejoin] = useState<{
     playerId: string;
@@ -85,12 +83,6 @@ export default function Join() {
     playerName: isJoined ? name || undefined : undefined,
   });
 
-  // WebSocket game controls for real-time interactions
-  const wsGameControls = useWebSocketGameControls({
-    sendMessage: sendMessage || (() => {}),
-    isConnected: isConnected,
-  });
-
   // Enhanced touch gestures for mobile
   const { attachGestures, isRefreshing: gestureRefreshing } = useTouchGestures({
     onPullToRefresh: async () => {
@@ -122,10 +114,17 @@ export default function Join() {
     }
   }, [myId]);
 
-  // Only fetch question data AFTER the game has actually started
-  // Game truly started only when backend sets isstarted flag OR WebSocket sends game_started
-  const hasStarted =
-    !!game_status?.isstarted || !!(game_state as any)?.isStarted;
+  const serverPhase = (game_state as any)?.phase as string | undefined;
+  const hasProtocolState = Boolean(serverPhase);
+  const questionIsVisible = hasProtocolState
+    ? serverPhase === "question"
+    : !!game_status?.isstarted;
+  const waitingMessage =
+    serverPhase === "intro_audio"
+      ? "Host is explaining the rules..."
+      : serverPhase === "countdown" || serverPhase === "countdown_pending"
+        ? "Get ready..."
+        : "Waiting for host to start the game...";
 
   useEffect(() => {
     // Prefer WebSocket question for real-time updates.
@@ -135,8 +134,7 @@ export default function Join() {
     const wsQ = (game_state as any)?.currentQuestion;
 
     if (wsQ) {
-      // Keep mobile clients on the waiting screen until game has officially started.
-      if (!hasStarted) {
+      if (!questionIsVisible) {
         setQuestion(null);
         return;
       }
@@ -190,7 +188,7 @@ export default function Join() {
       return;
     }
     // If no WS question yet, fall back to REST once the game is started
-    if (!hasStarted) {
+    if (!questionIsVisible) {
       setQuestion(null);
       return;
     }
@@ -225,7 +223,17 @@ export default function Join() {
       }
     };
     fetchCurrentQuestion();
-  }, [sessionId, hasStarted, game_status?.current_question_index, game_state]);
+  }, [
+    sessionId,
+    questionIsVisible,
+    game_status?.current_question_index,
+    game_state,
+  ]);
+
+  useEffect(() => {
+    setHasSubmitted(false);
+    setVal("");
+  }, [question?.id]);
 
   // Load stored player ID and name if available
   useEffect(() => {
@@ -356,14 +364,21 @@ export default function Join() {
 
   // Submit answer
   const submit = async (v: string) => {
-    if (!sessionId || !question || !myId || !hasStarted) return;
+    if (!sessionId || !question || !myId || !questionIsVisible || hasSubmitted)
+      return;
 
     setSubmitLoading(true);
 
     try {
       // Try WebSocket first if connected, fallback to HTTP API
-      if (isConnected && wsGameControls && sendMessage) {
-        wsGameControls.submitAnswer(myId, question.id, v);
+      if (isConnected && sendMessage) {
+        sendMessage({
+          type: "submit_answer",
+          data: {
+            answer: v,
+            question_id: question.id,
+          },
+        });
         showSuccess("Answer submitted via WebSocket!");
       } else {
         await submitAnswer({
@@ -374,6 +389,7 @@ export default function Join() {
         });
         showSuccess("Answer submitted!");
       }
+      setHasSubmitted(true);
       setVal("");
     } catch (err: any) {
       const errorMsg = err.message || "Failed to submit answer";
@@ -521,8 +537,8 @@ export default function Join() {
                   ? `Question ${
                       (game_status.current_question_index || 0) + 1
                     }/${game_status.total_questions}`
-                  : !hasStarted
-                    ? "Waiting for host to start the game..."
+                  : !questionIsVisible
+                    ? "No question yet"
                     : "Waiting for next question..."}
               </div>
 
@@ -554,7 +570,7 @@ export default function Join() {
                           : undefined
                       }
                       timeRemaining={undefined} // Could add timer from game status
-                      disabled={submitLoading}
+                      disabled={submitLoading || hasSubmitted}
                     />
                   )}
 
@@ -573,19 +589,25 @@ export default function Join() {
                         onClick={() => submit(val)}
                         isLoading={submitLoading}
                         loadingText="Submitting..."
-                        disabled={!val.trim()}
+                        disabled={!val.trim() || hasSubmitted}
                         className="w-full py-3 text-lg font-semibold"
                       >
                         Submit Answer
                       </LoadingButton>
                     </div>
                   )}
+
+                  {hasSubmitted && (
+                    <div className="p-3 bg-green-900/20 border border-green-700 rounded-xl text-green-300 text-sm text-center">
+                      Answer submitted. Waiting for the next question...
+                    </div>
+                  )}
                 </div>
-              ) : !hasStarted ? (
+              ) : !questionIsVisible ? (
                 <div className="text-center py-12">
                   <div className="text-4xl mb-4">🕒</div>
                   <div className="text-stone-300 font-medium">
-                    You're in! Waiting for the host to start.
+                    {waitingMessage}
                   </div>
                   <div className="text-xs text-stone-500 mt-2">
                     {isConnected

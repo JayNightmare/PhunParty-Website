@@ -10,8 +10,11 @@ export interface WebSocketMessage {
 // Specific message types from your backend
 export type WebSocketMessageType =
   | "initial_state"
+  | "sync_state"
   | "connection_established"
   | "connection_ack"
+  | "sync_request"
+  | "ack"
   | "roster_update"
   | "request_roster"
   | "ping"
@@ -19,6 +22,10 @@ export type WebSocketMessageType =
   | "player_joined"
   | "player_left"
   | "game_started"
+  | "intro_started"
+  | "intro_skipped"
+  | "countdown_started"
+  | "preload_question"
   | "game_ended"
   | "question_started"
   | "question_ended"
@@ -32,6 +39,9 @@ export type WebSocketMessageType =
   | "session_stats"
   | "next_question"
   | "start_game"
+  | "intro_complete"
+  | "skip_intro"
+  | "request_current_question"
   | "end_game"
   | "get_session_stats"
   | "error"
@@ -47,6 +57,10 @@ export interface PhunPartyWebSocketMessage {
   type: WebSocketMessageType;
   data?: any;
   timestamp?: number;
+  event_id?: string;
+  message_id?: string;
+  requires_ack?: boolean;
+  serverTime?: number;
 }
 
 export interface UseWebSocketOptions {
@@ -114,11 +128,65 @@ const useWebSocket = (
   const [sessionStats, setSessionStats] = useState<any | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const reconnectCountRef = useRef(0);
   const shouldReconnectRef = useRef(true);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
   const baseReconnectDelayRef = useRef(reconnectInterval);
+  const processedEventIdsRef = useRef<Set<string>>(new Set());
+  const MAX_PROCESSED_EVENTS = 500;
+  const PRUNE_PROCESSED_EVENTS_TO = 400;
+
+  const sendRawMessage = useCallback((message: PhunPartyWebSocketMessage) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+
+    wsRef.current.send(
+      JSON.stringify({
+        ...message,
+        timestamp: message.timestamp || Date.now(),
+      }),
+    );
+  }, []);
+
+  const sendAck = useCallback(
+    (message: PhunPartyWebSocketMessage) => {
+      const eventId = message.event_id || message.message_id;
+      if (!eventId) return;
+
+      sendRawMessage({
+        type: "ack",
+        event_id: eventId,
+        data: {
+          event_id: eventId,
+        },
+      });
+    },
+    [sendRawMessage],
+  );
+
+  const shouldProcess = useCallback((message: PhunPartyWebSocketMessage) => {
+    const eventId = message.event_id || message.message_id;
+    if (!eventId) return true;
+
+    if (processedEventIdsRef.current.has(eventId)) {
+      return false;
+    }
+
+    processedEventIdsRef.current.add(eventId);
+
+    if (processedEventIdsRef.current.size > MAX_PROCESSED_EVENTS) {
+      const ids = Array.from(processedEventIdsRef.current);
+      ids
+        .slice(0, ids.length - PRUNE_PROCESSED_EVENTS_TO)
+        .forEach((id) => processedEventIdsRef.current.delete(id));
+    }
+
+    return true;
+  }, []);
 
   const connect = useCallback(() => {
     if (!url) {
@@ -167,33 +235,6 @@ const useWebSocket = (
         setConnectionState("connected");
         reconnectCountRef.current = 0;
         onConnect?.();
-
-        // For mobile clients, send an explicit "announce" message after connection
-        // to ensure the backend broadcasts player_joined to all web clients
-        if (clientType === "mobile" && playerId && playerName) {
-          try {
-            const announceMessage = {
-              type: "player_announce",
-              data: {
-                player_id: playerId,
-                player_name: playerName,
-                player_photo: playerPhoto,
-                timestamp: new Date().toISOString(),
-              },
-            };
-            // Small delay to ensure backend connection handler completes
-            setTimeout(() => {
-              if (
-                wsRef.current &&
-                wsRef.current.readyState === WebSocket.OPEN
-              ) {
-                wsRef.current.send(JSON.stringify(announceMessage));
-              }
-            }, 150);
-          } catch (e) {
-            console.warn("Failed to send player_announce:", e);
-          }
-        }
 
         // start heartbeat here in case backend doesn't send an initial message
         if (heartbeatIntervalRef.current) {
@@ -259,6 +300,15 @@ const useWebSocket = (
           const message: PhunPartyWebSocketMessage = JSON.parse(event.data);
           setLastMessage(message);
 
+          if (message.type === "ping") {
+            sendRawMessage({ type: "pong" });
+            return;
+          }
+
+          if (message.requires_ack) {
+            sendAck(message);
+          }
+
           // Handle special message types
           if (message.type === "session_stats") {
             setSessionStats(message.data);
@@ -275,6 +325,13 @@ const useWebSocket = (
             setIsConnected(true);
             setIsReconnecting(false);
             setConnectionState("connected");
+
+            sendRawMessage({ type: "connection_ack" });
+            sendRawMessage({ type: "sync_request" });
+          }
+
+          if (!shouldProcess(message)) {
+            return;
           }
 
           onMessage?.(message);
@@ -297,6 +354,9 @@ const useWebSocket = (
     onDisconnect,
     onError,
     onMessage,
+    sendAck,
+    sendRawMessage,
+    shouldProcess,
   ]);
 
   const disconnect = useCallback(() => {
@@ -328,20 +388,16 @@ const useWebSocket = (
     reconnectCountRef.current = 0;
   }, []);
 
-  const sendMessage = useCallback((message: PhunPartyWebSocketMessage) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+  const sendMessage = useCallback(
+    (message: PhunPartyWebSocketMessage) => {
       try {
-        wsRef.current.send(
-          JSON.stringify({
-            ...message,
-            timestamp: message.timestamp || Date.now(),
-          }),
-        );
+        sendRawMessage(message);
       } catch (error) {
         console.error("Failed to send WebSocket message:", error);
       }
-    }
-  }, []);
+    },
+    [sendRawMessage],
+  );
 
   // Heartbeat/ping functionality
   const sendPing = useCallback(() => {
