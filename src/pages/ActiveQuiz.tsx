@@ -46,6 +46,7 @@ export default function ActiveQuiz() {
   const introCompleteSentRef = useRef(false);
   const playedIntroRef = useRef<string | null>(null);
   const hasNavigatedToStats = useRef(false);
+  const [skipIntroSent, setSkipIntroSent] = useState(false);
   // Timer duration based on difficulty – must be declared before any conditional returns
   const [timerMs, setTimerMs] = useState<number>(30000);
 
@@ -75,6 +76,16 @@ export default function ActiveQuiz() {
   const serverPhase = (wsGameState as any)?.phase as string | undefined;
   const serverCountdown = (wsGameState as any)?.countdown;
   const serverOffsetMs = (wsGameState as any)?.serverOffsetMs || 0;
+  const wsQuestion = (wsGameState as any)?.currentQuestion;
+  const wsGameMetadata = (wsGameState as any)?.game_state;
+  const questionEndsAt =
+    wsQuestion?.question_ends_at ??
+    wsQuestion?.ends_at ??
+    wsQuestion?.end_at ??
+    wsGameMetadata?.question_ends_at ??
+    wsGameMetadata?.ends_at ??
+    wsGameMetadata?.end_at ??
+    null;
   const introEventId = (wsGameState as any)?.introEventId as
     | string
     | null
@@ -150,6 +161,10 @@ export default function ActiveQuiz() {
       setIntroMode(true);
     }
   }, [location.search]);
+
+  useEffect(() => {
+    setSkipIntroSent(false);
+  }, [introEventId]);
 
   useEffect(() => {
     if (!serverPhase) return;
@@ -292,7 +307,7 @@ export default function ActiveQuiz() {
     }
 
     // Prefer WebSocket currentQuestion when available
-    const wsQ = (wsGameState as any)?.currentQuestion;
+    const wsQ = wsQuestion;
 
     const shouldProcessWSQuestion = wsQ && questionIsVisible;
 
@@ -459,6 +474,7 @@ export default function ActiveQuiz() {
   }, [
     game_status,
     wsGameState,
+    wsQuestion,
     connectedPlayers,
     serverPhase,
     introMode,
@@ -553,11 +569,6 @@ export default function ActiveQuiz() {
     }
   };
 
-  // Legacy next question handler for timer
-  const next = async () => {
-    await handleNextQuestion();
-  };
-
   if (!game_status && loading && !introMode) {
     return (
       <main className="max-w-6xl mx-auto px-4 py-8">
@@ -626,6 +637,9 @@ export default function ActiveQuiz() {
           <button
             type="button"
             onClick={() => {
+              if (skipIntroSent) return;
+              setSkipIntroSent(true);
+              introCompleteSentRef.current = true;
               audioRef.current?.pause();
               if (sendMessage && isConnected) {
                 sendMessage({
@@ -636,9 +650,10 @@ export default function ActiveQuiz() {
                 });
               }
             }}
+            disabled={skipIntroSent}
             className="px-6 py-3 bg-tea-500 text-ink-900 rounded-xl font-semibold hover:bg-tea-400 transition"
           >
-            Skip
+            {skipIntroSent ? "Skipping..." : "Skip"}
           </button>
         </div>
       </div>
@@ -689,7 +704,12 @@ export default function ActiveQuiz() {
               />
             </div>
 
-            <Timer ms={timerMs} keyer={keyer} onEnd={next} />
+            <Timer
+              ms={questionIsVisible && !questionEndsAt ? timerMs : undefined}
+              endsAt={questionIsVisible ? questionEndsAt : null}
+              serverOffsetMs={serverOffsetMs}
+              keyer={keyer}
+            />
           </div>
         </div>
 
