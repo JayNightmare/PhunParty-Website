@@ -40,7 +40,7 @@ export default function ActiveQuiz() {
   const [introMode, setIntroMode] = useState(false); // whether we're in tutorial phase
   const [countdown, setCountdown] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const introCompleteSentRef = useRef(false);
   const hasNavigatedToStats = useRef(false);
   // Timer duration based on difficulty – must be declared before any conditional returns
@@ -179,17 +179,21 @@ export default function ActiveQuiz() {
   useEffect(() => {
     if (serverPhase !== "intro_audio") return;
 
-    if (audioRef.current) {
-      audioRef.current.play().catch((err) => {
-        console.warn("Intro audio failed to play.", err);
-      });
-      return;
+    introCompleteSentRef.current = false;
+
+    let audio = audioRef.current;
+
+    if (!audio) {
+      audio = new Audio("/audio/tutorial_voiceline1.mp3");
+      audioRef.current = audio;
     }
 
-    introCompleteSentRef.current = false;
-    const audio = new Audio("/audio/tutorial_voiceline1.mp3");
-    audioRef.current = audio;
-    audio.addEventListener("ended", sendIntroComplete);
+    audio.currentTime = 0;
+
+    audio.onended = () => {
+      sendIntroComplete();
+    };
+
     audio.play().catch((err) => {
       console.warn(
         "Intro audio failed to autoplay, waiting for user interaction.",
@@ -198,9 +202,9 @@ export default function ActiveQuiz() {
     });
 
     return () => {
-      audio.removeEventListener("ended", sendIntroComplete);
+      audio.onended = null;
     };
-  }, [serverPhase, sendMessage, isConnected]);
+  }, [serverPhase, sendIntroComplete]);
 
   // Countdown display follows the backend's question_start_at timestamp.
   useEffect(() => {
@@ -594,7 +598,8 @@ export default function ActiveQuiz() {
         <div className="text-center space-y-6">
           <h1 className="text-4xl font-bold tracking-wide">Get Ready!</h1>
           <p className="text-stone-300 max-w-md mx-auto">
-            Listen to the brief tutorial. The game will start when the server is ready.
+            Listen to the brief tutorial. The game will start when the server is
+            ready.
           </p>
           {countdown !== null ? (
             <div className="text-6xl font-mono">{countdown}</div>
