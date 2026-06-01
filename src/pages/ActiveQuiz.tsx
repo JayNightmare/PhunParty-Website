@@ -1,5 +1,5 @@
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { Question, MCQOption } from "@/types";
 import { Player } from "@/hooks/useGameWebSocket";
 
@@ -42,6 +42,7 @@ export default function ActiveQuiz() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const countdownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const introCompleteSentRef = useRef(false);
+  const playedIntroRef = useRef<string | null>(null);
   const hasNavigatedToStats = useRef(false);
   // Timer duration based on difficulty – must be declared before any conditional returns
   const [timerMs, setTimerMs] = useState<number>(30000);
@@ -72,6 +73,10 @@ export default function ActiveQuiz() {
   const serverPhase = (wsGameState as any)?.phase as string | undefined;
   const serverCountdown = (wsGameState as any)?.countdown;
   const serverOffsetMs = (wsGameState as any)?.serverOffsetMs || 0;
+  const introEventId = (wsGameState as any)?.introEventId as
+    | string
+    | null
+    | undefined;
   const hasProtocolState = Boolean(serverPhase);
   const questionIsVisible = hasProtocolState
     ? serverPhase === "question"
@@ -159,7 +164,7 @@ export default function ActiveQuiz() {
     setIntroMode(false);
   }, [serverPhase]);
 
-  const sendIntroComplete = () => {
+  const sendIntroComplete = useCallback(() => {
     if (introCompleteSentRef.current || !sendMessage || !isConnected) return;
 
     introCompleteSentRef.current = true;
@@ -173,12 +178,15 @@ export default function ActiveQuiz() {
         duration_ms: durationMs,
       },
     });
-  };
+  }, [isConnected, sendMessage]);
 
   // Handle intro audio playback only when the backend starts the intro phase.
   useEffect(() => {
     if (serverPhase !== "intro_audio") return;
 
+    const introKey = introEventId || `${sessionId}:intro_audio`;
+    if (playedIntroRef.current === introKey) return;
+    playedIntroRef.current = introKey;
     introCompleteSentRef.current = false;
 
     let audio = audioRef.current;
@@ -204,7 +212,7 @@ export default function ActiveQuiz() {
     return () => {
       audio.onended = null;
     };
-  }, [serverPhase, sendIntroComplete]);
+  }, [serverPhase, introEventId, sessionId, sendIntroComplete]);
 
   // Countdown display follows the backend's question_start_at timestamp.
   useEffect(() => {
