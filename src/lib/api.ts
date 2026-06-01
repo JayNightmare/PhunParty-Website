@@ -222,6 +222,18 @@ export interface QuestionResponse {
   answer: string | null;
   genre?: string | null;
   difficulty?: string | null;
+  ui_mode?: string | null;
+  accepted_answers?: string[];
+}
+
+export interface AnswerMatchMetadata {
+  is_match?: boolean;
+  method?: string;
+  matched_answer?: string | null;
+  score?: number | null;
+  normalized_answer?: string | null;
+  normalized_correct?: string | null;
+  [key: string]: unknown;
 }
 
 export interface QuestionsAddedResponseModel {
@@ -275,6 +287,7 @@ export interface SubmitAnswerResponse {
   player_answer: string;
   is_correct: boolean;
   game_state: Record<string, unknown>;
+  answer_match?: AnswerMatchMetadata | null;
 }
 
 type BackendScore = {
@@ -346,6 +359,9 @@ type BackendQuestion = {
   genre?: string | null;
   difficulty?: string | null;
   options?: string[] | null;
+  display_options?: string[] | null;
+  accepted_answers?: string[] | null;
+  ui_mode?: string | null;
   message?: string;
   question_index?: number;
   total_questions?: number;
@@ -409,14 +425,20 @@ const mapSession = (raw: BackendGameSession): GameResponse => ({
 const mapQuestion = (raw: BackendQuestion): QuestionResponse => ({
   id: raw.question_id ?? "",
   prompt: raw.question ?? raw.message ?? "",
-  options: Array.isArray(raw.options)
-    ? raw.options.filter(
+  options: Array.isArray(raw.options ?? raw.display_options)
+    ? (raw.options ?? raw.display_options ?? []).filter(
         (option): option is string => typeof option === "string",
       )
     : [],
   answer: raw.answer ?? null,
   genre: raw.genre ?? null,
   difficulty: raw.difficulty ?? null,
+  ui_mode: raw.ui_mode ?? null,
+  accepted_answers: Array.isArray(raw.accepted_answers)
+    ? raw.accepted_answers.filter(
+        (answer): answer is string => typeof answer === "string",
+      )
+    : [],
 });
 
 const mapGameStatus = (raw: BackendGameStatus): GameStatusResponse => {
