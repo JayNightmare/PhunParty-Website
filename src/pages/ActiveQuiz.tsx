@@ -471,8 +471,8 @@ export default function ActiveQuiz() {
   // Automatically navigate to stats page when the game completes
   useEffect(() => {
     if (!sessionId) return;
-    // Only navigate when the server reports the game has ended
-    if (game_status?.game_state === "ended") {
+
+    if (serverPhase === "ended" || game_status?.game_state === "ended") {
       if (!hasNavigatedToStats.current) {
         hasNavigatedToStats.current = true;
         navigate(`/stats/${sessionId}/`, { replace: true });
@@ -480,7 +480,7 @@ export default function ActiveQuiz() {
     } else {
       hasNavigatedToStats.current = false;
     }
-  }, [game_status?.game_state, navigate, sessionId]);
+  }, [game_status?.game_state, navigate, serverPhase, sessionId]);
 
   // Game Control Handlers
   const handlePause = async () => {
