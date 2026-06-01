@@ -20,6 +20,7 @@ export interface GameState {
     | string;
   currentQuestion: any | null;
   preloadedQuestion?: any | null;
+  introEventId?: string | null;
   countdown?: {
     startAt?: string;
     durationMs?: number;
@@ -290,13 +291,31 @@ export const useGameWebSocket = (
             : state.game_state === "active"
               ? "question"
               : "lobby");
-        const incomingPlayers = normalizePlayers(
-          raw.connected_players ?? state.connected_players ?? state.players,
-        );
+        const rawPlayers =
+          raw.connected_players ?? state.connected_players ?? state.players;
+        const hasAuthoritativePlayers = Array.isArray(rawPlayers);
+        const incomingPlayers = normalizePlayers(rawPlayers);
         const normalizedQuestion =
           phase === "question"
             ? extractQuestion(state.current_question ?? state.question)
             : null;
+        const questionStartAt =
+          normalizedQuestion?.start_at ??
+          state.start_at ??
+          state.question_start_at;
+        const questionStartAtMs = questionStartAt
+          ? Date.parse(questionStartAt)
+          : NaN;
+        const shouldDelayQuestion =
+          phase === "question" &&
+          normalizedQuestion &&
+          !Number.isNaN(questionStartAtMs) &&
+          questionStartAtMs > estimatedServerNowMs();
+
+        if (scheduledQuestionTimeoutRef.current) {
+          clearTimeout(scheduledQuestionTimeoutRef.current);
+          scheduledQuestionTimeoutRef.current = null;
+        }
 
         setGameState((prev) => {
           const base: GameState =
@@ -316,25 +335,23 @@ export const useGameWebSocket = (
             gameType: (state.game_type || base.gameType || "trivia") as
               | "trivia"
               | "buzzer",
-            phase,
+            phase: shouldDelayQuestion ? "countdown" : phase,
             isActive: phase !== "lobby" && phase !== "ended",
-            isStarted: phase === "question",
+            isStarted: phase === "question" && !shouldDelayQuestion,
             currentQuestion:
-              phase === "question"
+              phase === "question" && !shouldDelayQuestion
                 ? mergeQuestion(base.currentQuestion, normalizedQuestion)
                 : null,
             countdown:
-              phase === "countdown"
+              phase === "countdown" || shouldDelayQuestion
                 ? {
                     startAt: state.start_at,
                     durationMs: state.duration_ms,
-                    questionStartAt: state.question_start_at,
+                    questionStartAt: state.question_start_at ?? questionStartAt,
                   }
                 : null,
-            connectedPlayers: Array.isArray(
-              raw.connected_players ?? state.connected_players ?? state.players,
-            )
-              ? mergePlayers(base.connectedPlayers, incomingPlayers)
+            connectedPlayers: hasAuthoritativePlayers
+              ? incomingPlayers
               : base.connectedPlayers,
             game_state: {
               ...(base.game_state || {}),
@@ -346,7 +363,48 @@ export const useGameWebSocket = (
         });
 
         if (phase === "question" && normalizedQuestion) {
-          onQuestionStarted?.(normalizedQuestion);
+          if (shouldDelayQuestion) {
+            scheduledQuestionTimeoutRef.current = scheduleAtServerTime(
+              questionStartAt,
+              () => {
+                setGameState((prev) => {
+                  const base: GameState =
+                    prev ||
+                    ({
+                      sessionCode,
+                      gameType: "trivia",
+                      isActive: true,
+                      currentQuestion: null,
+                      connectedPlayers: [],
+                      game_state: null,
+                    } as GameState);
+
+                  return {
+                    ...base,
+                    phase: "question",
+                    isActive: true,
+                    isStarted: true,
+                    currentQuestion: mergeQuestion(
+                      base.currentQuestion,
+                      normalizedQuestion,
+                    ),
+                    connectedPlayers: base.connectedPlayers.map((p) => ({
+                      ...p,
+                      answered_current: false,
+                    })),
+                    game_state: {
+                      ...(base.game_state || {}),
+                      ...state,
+                    },
+                    serverOffsetMs: serverOffsetMsRef.current,
+                  };
+                });
+                onQuestionStarted?.(normalizedQuestion);
+              },
+            );
+          } else {
+            onQuestionStarted?.(normalizedQuestion);
+          }
         }
       };
 
@@ -640,6 +698,13 @@ export const useGameWebSocket = (
                 connectedPlayers: [],
                 game_state: message.data?.game_state ?? null,
                 phase: message.data?.phase ?? "intro_audio",
+                introEventId:
+                  message.event_id ||
+                  message.message_id ||
+                  message.data?.event_id ||
+                  message.data?.message_id ||
+                  message.data?.phase_started_at_ms ||
+                  null,
                 isStarted: false,
                 serverOffsetMs: serverOffsetMsRef.current,
               } as GameState;
@@ -667,6 +732,14 @@ export const useGameWebSocket = (
             return {
               ...prev,
               phase: message.data?.phase ?? "intro_audio",
+              introEventId:
+                message.event_id ||
+                message.message_id ||
+                message.data?.event_id ||
+                message.data?.message_id ||
+                message.data?.phase_started_at_ms ||
+                prev.introEventId ||
+                null,
               isActive: true,
               currentQuestion: null,
               connectedPlayers,
@@ -696,6 +769,14 @@ export const useGameWebSocket = (
             return {
               ...base,
               phase: "intro_audio",
+              introEventId:
+                message.event_id ||
+                message.message_id ||
+                message.data?.event_id ||
+                message.data?.message_id ||
+                message.data?.phase_started_at_ms ||
+                base.introEventId ||
+                null,
               isActive: true,
               isStarted: false,
               currentQuestion: null,
@@ -998,6 +1079,7 @@ export const useGameWebSocket = (
       onErrorCallback,
       updateServerOffset,
       scheduleAtServerTime,
+      estimatedServerNowMs,
     ],
   );
 
