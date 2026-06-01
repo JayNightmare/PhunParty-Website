@@ -15,6 +15,8 @@ export type Question = {
     answer: string;
     difficulty?: Difficulty;
     genre?: string;
+    uiMode?: string | null;
+    acceptedAnswers?: string[];
 };
 
 // Frontend Session type (for display)

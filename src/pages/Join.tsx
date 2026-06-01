@@ -167,7 +167,7 @@ export default function Join() {
       let questionType: "mcq" | "free";
       if (uiMode === "multiple_choice") {
         questionType = "mcq";
-      } else if (uiMode === "free_text") {
+      } else if (uiMode === "text_input" || uiMode === "free_text") {
         questionType = "free";
       } else {
         // Fallback: determine by options existence
@@ -182,6 +182,10 @@ export default function Join() {
         answer: answerText,
         genre: wsQ.genre || undefined,
         difficulty,
+        uiMode,
+        acceptedAnswers: Array.isArray(wsQ.accepted_answers)
+          ? wsQ.accepted_answers
+          : [],
       };
 
       setQuestion(finalQuestion);
@@ -205,7 +209,13 @@ export default function Join() {
             })) || [];
           setQuestion({
             id: currentQuestion.id,
-            type: mcqOptions.length > 0 ? "mcq" : "free",
+            type:
+              currentQuestion.ui_mode === "text_input" ||
+              currentQuestion.ui_mode === "free_text"
+                ? "free"
+                : mcqOptions.length > 0
+                  ? "mcq"
+                  : "free",
             prompt: currentQuestion.prompt || "",
             options: mcqOptions,
             answer: currentQuestion.answer || "",
@@ -213,6 +223,8 @@ export default function Join() {
             difficulty:
               (currentQuestion.difficulty as Question["difficulty"]) ||
               undefined,
+            uiMode: currentQuestion.ui_mode,
+            acceptedAnswers: currentQuestion.accepted_answers,
           });
         } else {
           setQuestion(null);
@@ -381,13 +393,18 @@ export default function Join() {
         });
         showSuccess("Answer submitted via WebSocket!");
       } else {
-        await submitAnswer({
+        const result = await submitAnswer({
           player_id: myId,
           session_code: sessionId,
           question_id: question.id,
           player_answer: v,
         });
-        showSuccess("Answer submitted!");
+        const matchMethod = result.answer_match?.method;
+        showSuccess(
+          result.is_correct && matchMethod && matchMethod !== "exact"
+            ? "Answer accepted!"
+            : "Answer submitted!",
+        );
       }
       setHasSubmitted(true);
       setVal("");

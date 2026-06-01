@@ -399,6 +399,10 @@ export default function ActiveQuiz() {
         answer: answerText,
         genre: wsQ.genre || undefined,
         difficulty,
+        uiMode,
+        acceptedAnswers: Array.isArray(wsQ.accepted_answers)
+          ? wsQ.accepted_answers
+          : [],
       };
 
       setQuestion(finalQuestion);
@@ -419,7 +423,13 @@ export default function ActiveQuiz() {
               })) || [];
             setQuestion({
               id: currentQuestion.id,
-              type: mcqOptions.length > 0 ? "mcq" : "free",
+              type:
+                currentQuestion.ui_mode === "text_input" ||
+                currentQuestion.ui_mode === "free_text"
+                  ? "free"
+                  : mcqOptions.length > 0
+                    ? "mcq"
+                    : "free",
               prompt: currentQuestion.prompt || "",
               options: mcqOptions,
               answer: currentQuestion.answer || "",
@@ -427,6 +437,8 @@ export default function ActiveQuiz() {
               difficulty:
                 (currentQuestion.difficulty as Question["difficulty"]) ||
                 undefined,
+              uiMode: currentQuestion.ui_mode,
+              acceptedAnswers: currentQuestion.accepted_answers,
             });
           } else {
             setQuestion(null);
