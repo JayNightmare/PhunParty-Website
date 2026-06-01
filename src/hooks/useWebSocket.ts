@@ -128,12 +128,18 @@ const useWebSocket = (
   const [sessionStats, setSessionStats] = useState<any | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const reconnectCountRef = useRef(0);
   const shouldReconnectRef = useRef(true);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
   const baseReconnectDelayRef = useRef(reconnectInterval);
   const processedEventIdsRef = useRef<Set<string>>(new Set());
+  const MAX_PROCESSED_EVENTS = 500;
+  const PRUNE_PROCESSED_EVENTS_TO = 400;
 
   const sendRawMessage = useCallback((message: PhunPartyWebSocketMessage) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
@@ -171,6 +177,14 @@ const useWebSocket = (
     }
 
     processedEventIdsRef.current.add(eventId);
+
+    if (processedEventIdsRef.current.size > MAX_PROCESSED_EVENTS) {
+      const ids = Array.from(processedEventIdsRef.current);
+      ids
+        .slice(0, ids.length - PRUNE_PROCESSED_EVENTS_TO)
+        .forEach((id) => processedEventIdsRef.current.delete(id));
+    }
+
     return true;
   }, []);
 

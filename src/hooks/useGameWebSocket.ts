@@ -39,8 +39,10 @@ export interface Player {
   player_answered?: boolean;
 }
 
-export interface UseGameWebSocketOptions
-  extends Omit<UseWebSocketOptions, "onMessage" | "onError"> {
+export interface UseGameWebSocketOptions extends Omit<
+  UseWebSocketOptions,
+  "onMessage" | "onError"
+> {
   sessionCode: string;
   onPlayerJoined?: (player: Player) => void;
   onPlayerLeft?: (playerId: string) => void;
@@ -99,7 +101,7 @@ export interface UseGameWebSocketReturn {
 }
 
 export const useGameWebSocket = (
-  options: UseGameWebSocketOptions
+  options: UseGameWebSocketOptions,
 ): UseGameWebSocketReturn => {
   const {
     sessionCode,
@@ -127,7 +129,9 @@ export const useGameWebSocket = (
     ((message: PhunPartyWebSocketMessage) => void) | null
   >(null);
   const serverOffsetMsRef = useRef(0);
-  const scheduledQuestionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scheduledQuestionTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   const updateServerOffset = useCallback((serverTimeMs?: number) => {
     if (typeof serverTimeMs !== "number" || Number.isNaN(serverTimeMs)) return;
@@ -193,7 +197,7 @@ export const useGameWebSocket = (
       // Helper to safely merge question fields without losing display_options
       const mergeQuestion = (
         existing: any | null,
-        incoming: any | null
+        incoming: any | null,
       ): any | null => {
         if (!incoming) return existing;
         if (!existing) return incoming;
@@ -239,7 +243,7 @@ export const useGameWebSocket = (
       // Helper to merge player lists preserving known names
       const mergePlayers = (
         existing: Player[],
-        incoming: Player[]
+        incoming: Player[],
       ): Player[] => {
         if (!Array.isArray(incoming)) return existing;
 
@@ -326,11 +330,12 @@ export const useGameWebSocket = (
                     durationMs: state.duration_ms,
                     questionStartAt: state.question_start_at,
                   }
-                : base.countdown ?? null,
-            connectedPlayers:
-              incomingPlayers.length > 0
-                ? mergePlayers(base.connectedPlayers, incomingPlayers)
-                : base.connectedPlayers,
+                : null,
+            connectedPlayers: Array.isArray(
+              raw.connected_players ?? state.connected_players ?? state.players,
+            )
+              ? mergePlayers(base.connectedPlayers, incomingPlayers)
+              : base.connectedPlayers,
             game_state: {
               ...(base.game_state || {}),
               ...state,
@@ -391,7 +396,7 @@ export const useGameWebSocket = (
             }
             const mergedQuestion = mergeQuestion(
               prev.currentQuestion,
-              normalized
+              normalized,
             );
             return {
               ...prev,
@@ -422,10 +427,10 @@ export const useGameWebSocket = (
                             ...p,
                             answered_current: true,
                           }
-                        : p
+                        : p,
                     ),
                   }
-                : null
+                : null,
             );
             onPlayerAnswered?.(playerId, playerName);
           }
@@ -436,7 +441,7 @@ export const useGameWebSocket = (
           // Generic broadcast update: may include current_question, players, stats, etc.
           const data = message.data || {};
           const normalizedQuestion = extractQuestion(
-            data.current_question || data.question || data
+            data.current_question || data.question || data,
           );
 
           setGameState((prev) => {
@@ -463,13 +468,13 @@ export const useGameWebSocket = (
               })) as Player[];
               connectedPlayers = mergePlayers(
                 base.connectedPlayers,
-                incomingPlayers
+                incomingPlayers,
               );
             }
 
             const mergedQuestion = mergeQuestion(
               base.currentQuestion,
-              normalizedQuestion
+              normalizedQuestion,
             );
 
             return {
@@ -516,13 +521,13 @@ export const useGameWebSocket = (
               })) as Player[];
               connectedPlayers = mergePlayers(
                 base.connectedPlayers,
-                incomingPlayers
+                incomingPlayers,
               );
             }
 
             const mergedQuestion = mergeQuestion(
               base.currentQuestion,
-              normalizedQuestion
+              normalizedQuestion,
             );
 
             return {
@@ -559,7 +564,7 @@ export const useGameWebSocket = (
 
             if (import.meta.env.DEV) {
               console.debug(
-                `[WS] Player joined: ${player.player_name} (${player.player_id})`
+                `[WS] Player joined: ${player.player_name} (${player.player_id})`,
               );
             }
 
@@ -576,7 +581,7 @@ export const useGameWebSocket = (
                 } as GameState);
               // Avoid duplicates by player_id
               const exists = base.connectedPlayers.some(
-                (p) => p.player_id === player.player_id
+                (p) => p.player_id === player.player_id,
               );
               if (import.meta.env.DEV) {
                 console.debug(
@@ -584,7 +589,7 @@ export const useGameWebSocket = (
                     player.player_name
                   } (exists=${exists}); total=${
                     base.connectedPlayers.length + (exists ? 0 : 1)
-                  }`
+                  }`,
                 );
               }
               return {
@@ -615,7 +620,7 @@ export const useGameWebSocket = (
               return {
                 ...base,
                 connectedPlayers: base.connectedPlayers.filter(
-                  (p) => p.player_id !== message.data.player_id
+                  (p) => p.player_id !== message.data.player_id,
                 ),
               };
             });
@@ -655,7 +660,7 @@ export const useGameWebSocket = (
               })) as Player[];
               connectedPlayers = mergePlayers(
                 prev.connectedPlayers,
-                incomingPlayers
+                incomingPlayers,
               ).map((p) => ({ ...p, answered_current: false }));
             }
 
@@ -797,7 +802,7 @@ export const useGameWebSocket = (
                   currentQuestion: null,
                   finalScores: message.data?.final_scores,
                 }
-              : null
+              : null,
           );
           onGameEnded?.();
           break;
@@ -862,15 +867,15 @@ export const useGameWebSocket = (
                             ...p,
                             answered_current: true,
                           }
-                        : p
+                        : p,
                     ),
                   }
-                : null
+                : null,
             );
 
             onPlayerAnswered?.(
               message.data.player_id,
-              message.data.player_name
+              message.data.player_name,
             );
           }
           break;
@@ -904,7 +909,7 @@ export const useGameWebSocket = (
                   ...prev,
                   game_state: message.data,
                 }
-              : null
+              : null,
           );
           break;
 
@@ -935,7 +940,7 @@ export const useGameWebSocket = (
             if (import.meta.env.DEV) {
               console.debug(
                 `[roster_update] Received ${updatedPlayers.length} players:`,
-                updatedPlayers.map((p) => p.player_name).join(", ")
+                updatedPlayers.map((p) => p.player_name).join(", "),
               );
             }
 
@@ -952,7 +957,7 @@ export const useGameWebSocket = (
                     currentQuestion: null,
                     connectedPlayers: updatedPlayers,
                     game_state: null,
-                  }
+                  },
             );
           }
           break;
@@ -993,7 +998,7 @@ export const useGameWebSocket = (
       onErrorCallback,
       updateServerOffset,
       scheduleAtServerTime,
-    ]
+    ],
   );
 
   const {
