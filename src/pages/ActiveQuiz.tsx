@@ -24,6 +24,8 @@ import { useWebSocketGameControls } from "@/hooks/useWebSocketGameControls";
 import WebSocketStatus from "@/components/WebSocketStatus";
 import WebSocketDiagnostics from "@/components/WebSocketDiagnostics";
 
+const COUNTDOWN_DURATION_MS = 3000;
+
 export default function ActiveQuiz() {
   const { sessionId } = useParams();
   const location = useLocation();
@@ -168,14 +170,11 @@ export default function ActiveQuiz() {
     if (introCompleteSentRef.current || !sendMessage || !isConnected) return;
 
     introCompleteSentRef.current = true;
-    const durationMs = audioRef.current?.duration
-      ? Math.round(audioRef.current.duration * 1000)
-      : 3000;
 
     sendMessage({
       type: "intro_complete",
       data: {
-        duration_ms: durationMs,
+        duration_ms: COUNTDOWN_DURATION_MS,
       },
     });
   }, [isConnected, sendMessage]);
@@ -231,7 +230,11 @@ export default function ActiveQuiz() {
         Date.parse(serverCountdown.questionStartAt) -
           (Date.now() + serverOffsetMs),
       );
-      setCountdown(Math.ceil(remainingMs / 1000));
+      const displayNumber =
+        remainingMs > 0
+          ? Math.max(1, Math.min(3, Math.ceil(remainingMs / 1000)))
+          : 0;
+      setCountdown(displayNumber);
     };
 
     updateCountdown();
@@ -628,9 +631,7 @@ export default function ActiveQuiz() {
                 sendMessage({
                   type: "skip_intro",
                   data: {
-                    duration_ms: audioRef.current?.duration
-                      ? Math.round(audioRef.current.duration * 1000)
-                      : 3000,
+                    duration_ms: COUNTDOWN_DURATION_MS,
                   },
                 });
               }
