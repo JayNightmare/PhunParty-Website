@@ -14,6 +14,8 @@ export default function NewSession() {
   const [hostName, setHostName] = useState("");
   const [num, setNum] = useState(5);
   const [difficulty, setDifficulty] = useState<Difficulty>("Easy");
+  const [fairPlayEnabled, setFairPlayEnabled] = useState(false);
+  const [maxFairPlayStrikes, setMaxFairPlayStrikes] = useState(3);
   const [availableGameTypes, setAvailableGameTypes] = useState<string[]>([]);
   const [selectedGameType, setSelectedGameType] = useState("");
 
@@ -125,7 +127,16 @@ export default function NewSession() {
         game_code: gameOfType.game_code, // Use actual game code
         ispublic: true,
         difficulty,
+        cheat_detection_enabled: fairPlayEnabled,
+        max_cheat_strikes: maxFairPlayStrikes,
       });
+      sessionStorage.setItem(
+        `phunparty:fair-play:${session.code}`,
+        JSON.stringify({
+          cheat_detection_enabled: fairPlayEnabled,
+          max_cheat_strikes: maxFairPlayStrikes,
+        }),
+      );
       showSuccess(`Session created! Code: ${session.code}`);
       // Navigate directly to waiting room for this session
       nav(`/session/${session.code}/waiting`);
@@ -215,6 +226,43 @@ export default function NewSession() {
               free‑text
             </p>
           </div>
+        </div>
+        <div className="mt-5 rounded-2xl bg-ink-700/70 border border-ink-600 p-4">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={fairPlayEnabled}
+              onChange={(event) => setFairPlayEnabled(event.target.checked)}
+              className="mt-1 h-4 w-4 accent-tea-500"
+            />
+            <span>
+              <span className="block text-sm font-medium text-stone-100">
+                Fair Play Mode
+              </span>
+              <span className="block text-xs text-stone-400 mt-1">
+                Players must stay on the answer screen during each question.
+                Leaving the app or switching screens gives a strike.
+              </span>
+            </span>
+          </label>
+          {fairPlayEnabled && (
+            <div className="mt-3 max-w-xs">
+              <label className="block text-xs text-stone-300 mb-1">
+                Strikes before removal
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={5}
+                value={maxFairPlayStrikes}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  setMaxFairPlayStrikes(Number.isFinite(value) ? value : 3);
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-ink-800 outline-none"
+              />
+            </div>
+          )}
         </div>
         <div className="mt-6 flex justify-end">
           <LoadingButton

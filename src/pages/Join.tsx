@@ -22,6 +22,7 @@ export default function Join() {
   const { showSuccess, showError } = useToast();
   const nameInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fairPlayReportedQuestionRef = useRef<string | null>(null);
 
   const [name, setName] = useState("");
   const [myId, setMyId] = useState<string | null>(null);
@@ -125,6 +126,20 @@ export default function Join() {
       : serverPhase === "countdown" || serverPhase === "countdown_pending"
         ? "Get ready..."
         : "Waiting for host to start the game...";
+  const fairPlay = game_state?.fairPlay;
+  const fairPlayEnabled = Boolean(fairPlay?.cheat_detection_enabled);
+  const maxFairPlayStrikes = Number(fairPlay?.max_cheat_strikes ?? 3);
+  const currentPlayer = game_state?.connectedPlayers?.find(
+    (player) => player.player_id === myId,
+  );
+  const fairPlayEvent = (game_state as any)?.game_state?.last_fair_play_event;
+  const kickedFromSession = (game_state as any)?.game_state?.kicked_from_session;
+  const isFrozen = Boolean(currentPlayer?.is_frozen);
+  const isKicked = Boolean(currentPlayer?.is_kicked || kickedFromSession);
+  const strikeCount =
+    typeof currentPlayer?.strike_count === "number"
+      ? currentPlayer.strike_count
+      : undefined;
 
   useEffect(() => {
     // Prefer WebSocket question for real-time updates.
@@ -245,7 +260,67 @@ export default function Join() {
   useEffect(() => {
     setHasSubmitted(false);
     setVal("");
+    fairPlayReportedQuestionRef.current = null;
   }, [question?.id]);
+
+  useEffect(() => {
+    if (
+      !fairPlayEnabled ||
+      !isJoined ||
+      !isConnected ||
+      !sendMessage ||
+      !sessionId ||
+      !question?.id ||
+      !questionIsVisible ||
+      isFrozen ||
+      isKicked
+    ) {
+      return;
+    }
+
+    const reportViolation = (reason: string) => {
+      if (fairPlayReportedQuestionRef.current === question.id) return;
+
+      fairPlayReportedQuestionRef.current = question.id;
+      sendMessage({
+        type: "focus_violation",
+        data: {
+          session_code: sessionId,
+          question_id: question.id,
+          reason,
+          occurred_at: new Date().toISOString(),
+        },
+      });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        reportViolation("app_backgrounded");
+      }
+    };
+
+    const handlePageHide = () => {
+      reportViolation("screen_blurred");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, [
+    fairPlayEnabled,
+    isConnected,
+    isFrozen,
+    isJoined,
+    isKicked,
+    question?.id,
+    questionIsVisible,
+    sendMessage,
+    sessionId,
+  ]);
 
   // Load stored player ID and name if available
   useEffect(() => {
@@ -378,6 +453,14 @@ export default function Join() {
   const submit = async (v: string) => {
     if (!sessionId || !question || !myId || !questionIsVisible || hasSubmitted)
       return;
+    if (isFrozen || isKicked) {
+      showError(
+        isKicked
+          ? "You have been removed from this session."
+          : "You are frozen for this question.",
+      );
+      return;
+    }
 
     setSubmitLoading(true);
 
@@ -497,6 +580,13 @@ export default function Join() {
                 {game_status.players?.length || 0}
               </div>
 
+              {fairPlayEnabled && (
+                <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-900/20 p-3 text-sm text-amber-200">
+                  Fair Play Mode is enabled. Leaving or backgrounding the app
+                  during a question may count as a strike.
+                </div>
+              )}
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-stone-300 mb-2">
@@ -549,6 +639,18 @@ export default function Join() {
           ) : (
             <div>
               <div className="text-lg font-semibold mb-2">Welcome, {name}!</div>
+              {isKicked && (
+                <div className="mb-4 rounded-xl border border-red-500/30 bg-red-900/25 p-4 text-sm text-red-200">
+                  You have been removed from this session after reaching the
+                  Fair Play strike limit.
+                </div>
+              )}
+              {!isKicked && fairPlayEnabled && (
+                <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-900/20 p-3 text-sm text-amber-200">
+                  Fair Play Mode is on. Strikes: {strikeCount ?? 0}/
+                  {maxFairPlayStrikes}
+                </div>
+              )}
               <div className="text-sm text-stone-400 mb-4">
                 {question
                   ? `Question ${
@@ -561,6 +663,19 @@ export default function Join() {
 
               {question ? (
                 <div className="space-y-4">
+                  {isFrozen && !isKicked && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-900/20 p-3 text-sm text-amber-200">
+                      You are frozen for this question. Wait for the next
+                      question to answer again.
+                    </div>
+                  )}
+                  {fairPlayEvent?.player_id === myId &&
+                    fairPlayEvent?.reason &&
+                    !isKicked && (
+                      <div className="rounded-xl border border-ink-600 bg-ink-800 p-3 text-xs text-stone-300">
+                        Latest Fair Play event: {fairPlayEvent.reason}
+                      </div>
+                    )}
                   <div className="p-4 bg-ink-800 rounded-xl">
                     <div className="text-lg font-medium mb-4">
                       {question.prompt}
@@ -587,7 +702,7 @@ export default function Join() {
                           : undefined
                       }
                       timeRemaining={undefined} // Could add timer from game status
-                      disabled={submitLoading || hasSubmitted}
+                      disabled={submitLoading || hasSubmitted || isFrozen || isKicked}
                     />
                   )}
 
@@ -601,12 +716,13 @@ export default function Join() {
                         className="w-full px-4 py-3 rounded-2xl bg-ink-700 border border-ink-600 text-stone-100 placeholder-stone-500 outline-none focus:ring-2 focus:ring-tea-500 focus:border-transparent text-lg"
                         maxLength={100}
                         autoFocus
+                        disabled={isFrozen || isKicked}
                       />
                       <LoadingButton
                         onClick={() => submit(val)}
                         isLoading={submitLoading}
                         loadingText="Submitting..."
-                        disabled={!val.trim() || hasSubmitted}
+                        disabled={!val.trim() || hasSubmitted || isFrozen || isKicked}
                         className="w-full py-3 text-lg font-semibold"
                       >
                         Submit Answer

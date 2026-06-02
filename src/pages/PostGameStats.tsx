@@ -63,6 +63,11 @@ export default function PostGameStats() {
 
   const sorted = [...scores].sort((a, b) => b.score - a.score);
   const winner = sorted[0];
+  const statusState = status?.game_state as string | undefined;
+  const displayStatus =
+    statusState === "ended" || statusState === "finished"
+      ? "finished"
+      : "in progress";
 
   if (!sessionId) return <main className="p-8">Session not specified.</main>;
 
@@ -111,7 +116,7 @@ export default function PostGameStats() {
         <Card className="p-6">
           <div className="text-lg font-semibold">Game Summary</div>
           <div className="mt-2 text-sm text-stone-300">
-            State: {status?.game_state || "unknown"}
+            Game status: {displayStatus}
           </div>
           {error && <div className="mt-2 text-red-500 text-sm">{error}</div>}
           <div className="mt-4 text-sm text-stone-400">

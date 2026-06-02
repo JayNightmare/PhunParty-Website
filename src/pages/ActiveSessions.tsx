@@ -55,6 +55,11 @@ export default function ActiveSessions() {
 
   // Merge real-time status with local status if available
   const currentStatus = realTimeStatus || status;
+  const currentGameState = currentStatus?.game_state as string | undefined;
+  const currentDisplayStatus =
+    currentGameState === "ended" || currentGameState === "finished"
+      ? "finished"
+      : "in progress";
 
   // Redirect to login if not authenticated
   if (!authLoading && !user) {
@@ -131,7 +136,7 @@ export default function ActiveSessions() {
                 </div>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="text-sm text-stone-300">
-                    State: {currentStatus?.game_state || "unknown"}
+                    Game status: {currentDisplayStatus}
                   </div>
                   {!isConnected && <ConnectionIndicator size="sm" />}
                 </div>
