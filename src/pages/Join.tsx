@@ -134,7 +134,16 @@ export default function Join() {
   );
   const fairPlayEvent = (game_state as any)?.game_state?.last_fair_play_event;
   const kickedFromSession = (game_state as any)?.game_state?.kicked_from_session;
-  const isFrozen = Boolean(currentPlayer?.is_frozen);
+  const activeQuestionId =
+    question?.id ??
+    (game_state as any)?.currentQuestion?.question_id ??
+    (game_state as any)?.currentQuestion?.id;
+  const isFrozen = Boolean(
+    currentPlayer?.is_frozen &&
+      (!currentPlayer.frozen_question_id ||
+        !activeQuestionId ||
+        currentPlayer.frozen_question_id === activeQuestionId),
+  );
   const isKicked = Boolean(currentPlayer?.is_kicked || kickedFromSession);
   const strikeCount =
     typeof currentPlayer?.strike_count === "number"

@@ -345,13 +345,18 @@ const useGameUpdates = ({
   // Update connected players from game state
   useEffect(() => {
     if (game_state?.connectedPlayers) {
+      const hasFairPlayRemoval = Boolean(
+        (game_state.game_state as any)?.last_fair_play_event,
+      );
       // Only update if we have players, or if explicitly setting to empty (game ended)
-      if (game_state.connectedPlayers.length > 0 || !game_state.isActive) {
+      if (
+        game_state.connectedPlayers.length > 0 ||
+        !game_state.isActive ||
+        hasFairPlayRemoval
+      ) {
         setConnectedPlayers(game_state.connectedPlayers);
 
-        if (game_state.connectedPlayers.length > 0) {
-          writeRosterCache(sessionCode, game_state.connectedPlayers);
-        }
+        writeRosterCache(sessionCode, game_state.connectedPlayers);
       } else {
         console.warn(
           "[useGameUpdates] Skipping empty connectedPlayers update while game is active",

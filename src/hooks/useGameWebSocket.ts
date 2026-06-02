@@ -275,9 +275,30 @@ export const useGameWebSocket = (
             ...incomingPlayer,
             player_name:
               incomingPlayer.player_name || existingPlayer.player_name,
+            strike_count:
+              incomingPlayer.strike_count ?? existingPlayer.strike_count,
+            max_strikes: incomingPlayer.max_strikes ?? existingPlayer.max_strikes,
+            is_frozen: incomingPlayer.is_frozen ?? existingPlayer.is_frozen,
+            frozen_question_id:
+              incomingPlayer.frozen_question_id ??
+              existingPlayer.frozen_question_id,
+            is_kicked: incomingPlayer.is_kicked ?? existingPlayer.is_kicked,
+            fair_play_reason:
+              incomingPlayer.fair_play_reason ??
+              existingPlayer.fair_play_reason,
           };
         });
       };
+
+      const resetPlayersForNewQuestion = (players: Player[]): Player[] =>
+        players
+          .filter((player) => !player.is_kicked)
+          .map((player) => ({
+            ...player,
+            answered_current: false,
+            is_frozen: false,
+            frozen_question_id: undefined,
+          }));
 
       const normalizePlayers = (rawPlayers: any[] | undefined): Player[] => {
         if (!Array.isArray(rawPlayers)) return [];
@@ -289,8 +310,8 @@ export const useGameWebSocket = (
           connected_at: pl.connected_at || pl.timestamp,
           answered_current: pl.answered_current ?? pl.answered ?? false,
           score: pl.score,
-          strike_count: pl.strike_count ?? pl.fair_play_strikes,
-          max_strikes: pl.max_strikes,
+          strike_count: pl.strike_count ?? pl.fair_play_strikes ?? pl.strikes,
+          max_strikes: pl.max_strikes ?? pl.max_cheat_strikes,
           is_frozen: pl.is_frozen ?? pl.frozen_for_question,
           frozen_question_id: pl.frozen_question_id,
           is_kicked: pl.is_kicked,
@@ -315,6 +336,12 @@ export const useGameWebSocket = (
               "max_cheat_strikes" in raw ||
               "max_strikes" in raw),
         );
+
+      const getStrikeCount = (raw: any): number | undefined =>
+        raw?.strike_count ?? raw?.fair_play_strikes ?? raw?.strikes;
+
+      const getMaxStrikes = (raw: any): number | undefined =>
+        raw?.max_strikes ?? raw?.max_cheat_strikes ?? raw?.strike_limit;
 
       const applyAuthoritativeState = (raw: any) => {
         if (!raw) return;
@@ -389,7 +416,9 @@ export const useGameWebSocket = (
                   }
                 : null,
             connectedPlayers: hasAuthoritativePlayers
-              ? incomingPlayers
+              ? mergePlayers(base.connectedPlayers, incomingPlayers).filter(
+                  (player) => !player.is_kicked,
+                )
               : base.connectedPlayers,
             game_state: {
               ...(base.game_state || {}),
@@ -440,10 +469,9 @@ export const useGameWebSocket = (
                       base.currentQuestion,
                       normalizedQuestion,
                     ),
-                    connectedPlayers: base.connectedPlayers.map((p) => ({
-                      ...p,
-                      answered_current: false,
-                    })),
+                    connectedPlayers: resetPlayersForNewQuestion(
+                      base.connectedPlayers,
+                    ),
                     game_state: {
                       ...(base.game_state || {}),
                       ...state,
@@ -480,10 +508,9 @@ export const useGameWebSocket = (
               ...base,
               isActive: true,
               currentQuestion: mergedQuestion,
-              connectedPlayers: base.connectedPlayers.map((p) => ({
-                ...p,
-                answered_current: false,
-              })),
+              connectedPlayers: resetPlayersForNewQuestion(
+                base.connectedPlayers,
+              ),
             };
           });
           onQuestionStarted?.(message.data);
@@ -512,10 +539,9 @@ export const useGameWebSocket = (
               ...prev,
               isActive: true,
               currentQuestion: mergedQuestion,
-              connectedPlayers: prev.connectedPlayers.map((p) => ({
-                ...p,
-                answered_current: false,
-              })),
+              connectedPlayers: resetPlayersForNewQuestion(
+                prev.connectedPlayers,
+              ),
             };
           });
           onQuestionStarted?.(message.data);
@@ -536,6 +562,15 @@ export const useGameWebSocket = (
                         ? {
                             ...p,
                             answered_current: true,
+                            is_frozen:
+                              message.data.answer_status === "frozen"
+                                ? true
+                                : p.is_frozen,
+                            frozen_question_id:
+                              message.data.answer_status === "frozen"
+                                ? (message.data.question_id ??
+                                  p.frozen_question_id)
+                                : p.frozen_question_id,
                           }
                         : p,
                     ),
@@ -569,17 +604,11 @@ export const useGameWebSocket = (
             // Merge player list preserving existing names
             let connectedPlayers = base.connectedPlayers;
             if (Array.isArray(data.players)) {
-              const incomingPlayers = data.players.map((pl: any) => ({
-                player_id: pl.player_id || pl.id,
-                player_name: pl.player_name || pl.name,
-                player_photo: pl.player_photo,
-                answered_current: pl.answered_current ?? pl.answered ?? false,
-                score: pl.score,
-              })) as Player[];
+              const incomingPlayers = normalizePlayers(data.players);
               connectedPlayers = mergePlayers(
                 base.connectedPlayers,
                 incomingPlayers,
-              );
+              ).filter((player) => !player.is_kicked);
             }
 
             const mergedQuestion = mergeQuestion(
@@ -622,17 +651,11 @@ export const useGameWebSocket = (
             // Merge players if provided
             let connectedPlayers = base.connectedPlayers;
             if (Array.isArray(data.players)) {
-              const incomingPlayers = data.players.map((pl: any) => ({
-                player_id: pl.player_id || pl.id,
-                player_name: pl.player_name || pl.name,
-                player_photo: pl.player_photo,
-                answered_current: pl.answered_current ?? pl.answered ?? false,
-                score: pl.score,
-              })) as Player[];
+              const incomingPlayers = normalizePlayers(data.players);
               connectedPlayers = mergePlayers(
                 base.connectedPlayers,
                 incomingPlayers,
-              );
+              ).filter((player) => !player.is_kicked);
             }
 
             const mergedQuestion = mergeQuestion(
@@ -763,10 +786,9 @@ export const useGameWebSocket = (
             }
 
             // Handle players if provided
-            let connectedPlayers = prev.connectedPlayers.map((p) => ({
-              ...p,
-              answered_current: false,
-            }));
+            let connectedPlayers = resetPlayersForNewQuestion(
+              prev.connectedPlayers,
+            );
             if (message.data?.players && Array.isArray(message.data.players)) {
               const incomingPlayers = message.data.players.map((pl: any) => ({
                 player_id: pl.player_id || pl.id,
@@ -775,10 +797,9 @@ export const useGameWebSocket = (
                 answered_current: false,
                 score: pl.score,
               })) as Player[];
-              connectedPlayers = mergePlayers(
-                prev.connectedPlayers,
-                incomingPlayers,
-              ).map((p) => ({ ...p, answered_current: false }));
+              connectedPlayers = resetPlayersForNewQuestion(
+                mergePlayers(prev.connectedPlayers, incomingPlayers),
+              );
             }
 
             return {
@@ -975,10 +996,9 @@ export const useGameWebSocket = (
                   isActive: true,
                   isStarted: true,
                   currentQuestion: mergedQuestion,
-                  connectedPlayers: base.connectedPlayers.map((p) => ({
-                    ...p,
-                    answered_current: false,
-                  })),
+                  connectedPlayers: resetPlayersForNewQuestion(
+                    base.connectedPlayers,
+                  ),
                   game_state: {
                     ...(base.game_state || {}),
                     ...message.data,
@@ -1003,6 +1023,15 @@ export const useGameWebSocket = (
                         ? {
                             ...p,
                             answered_current: true,
+                            is_frozen:
+                              message.data.answer_status === "frozen"
+                                ? true
+                                : p.is_frozen,
+                            frozen_question_id:
+                              message.data.answer_status === "frozen"
+                                ? (message.data.question_id ??
+                                  p.frozen_question_id)
+                                : p.frozen_question_id,
                           }
                         : p,
                     ),
@@ -1065,6 +1094,58 @@ export const useGameWebSocket = (
 
         case "fair_play_status_update":
         case "player_flagged":
+          if (message.data?.player_id) {
+            setGameState((prev) => {
+              const base: GameState =
+                prev ||
+                ({
+                  sessionCode,
+                  gameType: "trivia",
+                  isActive: true,
+                  currentQuestion: null,
+                  connectedPlayers: [],
+                  game_state: null,
+                } as GameState);
+              const strikeCount = getStrikeCount(message.data);
+              const maxStrikes =
+                getMaxStrikes(message.data) ??
+                base.fairPlay?.max_cheat_strikes;
+
+              return {
+                ...base,
+                connectedPlayers: base.connectedPlayers.map((player) =>
+                  player.player_id === message.data.player_id
+                    ? {
+                        ...player,
+                        strike_count:
+                          strikeCount ?? player.strike_count,
+                        max_strikes: maxStrikes ?? player.max_strikes,
+                        is_frozen:
+                          message.type === "player_flagged"
+                            ? true
+                            : (message.data.is_frozen ??
+                              message.data.frozen_for_question ??
+                              player.is_frozen),
+                        frozen_question_id:
+                          message.data.frozen_question_id ??
+                          message.data.question_id ??
+                          player.frozen_question_id,
+                        is_kicked:
+                          message.data.is_kicked ?? player.is_kicked,
+                        fair_play_reason:
+                          message.data.reason ?? player.fair_play_reason,
+                      }
+                    : player,
+                ),
+                game_state: {
+                  ...(base.game_state || {}),
+                  last_fair_play_event: message.data,
+                },
+              };
+            });
+          }
+          break;
+
         case "player_kicked":
           if (message.data?.player_id) {
             setGameState((prev) => {
@@ -1078,43 +1159,33 @@ export const useGameWebSocket = (
                   connectedPlayers: [],
                   game_state: null,
                 } as GameState);
-              const maxStrikes =
-                message.data.max_strikes ??
-                message.data.max_cheat_strikes ??
-                base.fairPlay?.max_cheat_strikes;
+
+              const kickedSelf = message.data.player_id === playerId;
 
               return {
                 ...base,
-                connectedPlayers: base.connectedPlayers.map((player) =>
-                  player.player_id === message.data.player_id
-                    ? {
-                        ...player,
-                        strike_count:
-                          message.data.strike_count ?? player.strike_count,
-                        max_strikes: maxStrikes ?? player.max_strikes,
-                        is_frozen:
-                          message.type === "player_flagged"
-                            ? true
-                            : (message.data.is_frozen ?? player.is_frozen),
-                        frozen_question_id:
-                          message.data.frozen_question_id ??
-                          message.data.question_id ??
-                          player.frozen_question_id,
-                        is_kicked:
-                          message.type === "player_kicked"
-                            ? true
-                            : (message.data.is_kicked ?? player.is_kicked),
-                        fair_play_reason:
-                          message.data.reason ?? player.fair_play_reason,
-                      }
-                    : player,
+                connectedPlayers: base.connectedPlayers.filter(
+                  (player) => player.player_id !== message.data.player_id,
                 ),
                 game_state: {
                   ...(base.game_state || {}),
                   last_fair_play_event: message.data,
+                  ...(kickedSelf
+                    ? {
+                        kicked_from_session: {
+                          reason:
+                            message.data.reason ?? "fair_play_strikes",
+                          message:
+                            message.data.message ??
+                            "You were removed after reaching the Fair Play strike limit.",
+                        },
+                      }
+                    : {}),
                 },
               };
             });
+
+            onPlayerLeft?.(message.data.player_id);
           }
           break;
 
@@ -1130,6 +1201,44 @@ export const useGameWebSocket = (
                 }
               : prev,
           );
+          break;
+
+        case "answer_rejected":
+          setGameState((prev) => {
+            if (!prev) return prev;
+
+            const isFairPlayRestriction =
+              message.data?.reason === "fair_play_restriction";
+
+            return {
+              ...prev,
+              connectedPlayers:
+                isFairPlayRestriction && playerId
+                  ? prev.connectedPlayers.map((player) =>
+                      player.player_id === playerId
+                        ? {
+                            ...player,
+                            is_frozen: true,
+                            answered_current: true,
+                            frozen_question_id:
+                              message.data?.question_id ??
+                              player.frozen_question_id,
+                            fair_play_reason:
+                              message.data?.reason ??
+                              player.fair_play_reason,
+                          }
+                        : player,
+                    )
+                  : prev.connectedPlayers,
+              game_state: {
+                ...(prev.game_state || {}),
+                answer_rejected: message.data,
+                ...(isFairPlayRestriction
+                  ? { last_fair_play_event: message.data }
+                  : {}),
+              },
+            };
+          });
           break;
 
         case "session_stats":
@@ -1186,7 +1295,10 @@ export const useGameWebSocket = (
               prev
                 ? {
                     ...prev,
-                    connectedPlayers: updatedPlayers,
+                    connectedPlayers: mergePlayers(
+                      prev.connectedPlayers,
+                      updatedPlayers,
+                    ).filter((player) => !player.is_kicked),
                     game_state: {
                       ...(prev.game_state || {}),
                       ...message.data,
@@ -1197,7 +1309,9 @@ export const useGameWebSocket = (
                     gameType: "trivia",
                     isActive: false,
                     currentQuestion: null,
-                    connectedPlayers: updatedPlayers,
+                    connectedPlayers: updatedPlayers.filter(
+                      (player) => !player.is_kicked,
+                    ),
                     game_state: message.data ?? null,
                   },
             );

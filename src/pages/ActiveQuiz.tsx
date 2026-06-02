@@ -620,9 +620,10 @@ export default function ActiveQuiz() {
 
   // Determine which players to display: prefer live WS list
   const displayPlayers =
-    (connectedPlayers && connectedPlayers.length > 0
+    ((connectedPlayers && connectedPlayers.length > 0
       ? connectedPlayers
-      : players) || [];
+      : players) || []
+    ).filter((player) => !player.is_kicked);
   const fairPlay = (wsGameState as any)?.fairPlay;
   const fairPlayEnabled = Boolean(fairPlay?.cheat_detection_enabled);
   const maxFairPlayStrikes = Number(fairPlay?.max_cheat_strikes ?? 3);
