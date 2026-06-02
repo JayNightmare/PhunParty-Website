@@ -38,6 +38,8 @@ export interface Player {
   player_photo?: string;
   connected_at?: string;
   player_answered?: boolean;
+  answered_current?: boolean;
+  score?: number;
 }
 
 export interface UseGameWebSocketOptions extends Omit<
@@ -1016,16 +1018,18 @@ export const useGameWebSocket = (
           break;
 
         case "roster_update":
-          // CRITICAL: roster_update is AUTHORITATIVE - replace entire player list
-          if (message.data?.players && Array.isArray(message.data.players)) {
-            const updatedPlayers = message.data.players.map((pl: any) => ({
-              player_id: pl.player_id || pl.id,
-              player_name: pl.player_name || pl.name,
-              player_photo: pl.player_photo,
-              connected_at: pl.connected_at,
-              answered_current: pl.answered_current || false,
-              score: pl.score,
-            })) as Player[];
+          {
+            const rawPlayers =
+              message.data?.players ??
+              message.data?.connected_players ??
+              message.data?.mobile_players ??
+              message.data?.roster;
+
+            if (!Array.isArray(rawPlayers)) {
+              break;
+            }
+
+            const updatedPlayers = normalizePlayers(rawPlayers);
 
             if (import.meta.env.DEV) {
               console.debug(
@@ -1039,6 +1043,10 @@ export const useGameWebSocket = (
                 ? {
                     ...prev,
                     connectedPlayers: updatedPlayers,
+                    game_state: {
+                      ...(prev.game_state || {}),
+                      ...message.data,
+                    },
                   }
                 : {
                     sessionCode,
@@ -1046,7 +1054,7 @@ export const useGameWebSocket = (
                     isActive: false,
                     currentQuestion: null,
                     connectedPlayers: updatedPlayers,
-                    game_state: null,
+                    game_state: message.data ?? null,
                   },
             );
           }
