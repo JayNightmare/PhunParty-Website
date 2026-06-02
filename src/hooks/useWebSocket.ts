@@ -140,6 +140,16 @@ const useWebSocket = (
   const processedEventIdsRef = useRef<Set<string>>(new Set());
   const MAX_PROCESSED_EVENTS = 500;
   const PRUNE_PROCESSED_EVENTS_TO = 400;
+  const dedupedMessageTypes = useRef(
+    new Set<WebSocketMessageType>([
+      "game_started",
+      "intro_started",
+      "intro_skipped",
+      "countdown_started",
+      "question_started",
+      "game_ended",
+    ]),
+  );
 
   const sendRawMessage = useCallback((message: PhunPartyWebSocketMessage) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return;
@@ -169,6 +179,10 @@ const useWebSocket = (
   );
 
   const shouldProcess = useCallback((message: PhunPartyWebSocketMessage) => {
+    if (!dedupedMessageTypes.current.has(message.type)) {
+      return true;
+    }
+
     const eventId = message.event_id || message.message_id;
     if (!eventId) return true;
 
