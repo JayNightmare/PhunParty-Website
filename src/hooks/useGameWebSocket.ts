@@ -1019,11 +1019,17 @@ export const useGameWebSocket = (
 
         case "roster_update":
           {
-            const rawPlayers =
+            const rosterPayload =
               message.data?.players ??
               message.data?.connected_players ??
               message.data?.mobile_players ??
               message.data?.roster;
+            const rawPlayers = Array.isArray(rosterPayload)
+              ? rosterPayload
+              : (rosterPayload?.connected_players ??
+                rosterPayload?.mobile_players ??
+                rosterPayload?.players ??
+                rosterPayload?.list);
 
             if (!Array.isArray(rawPlayers)) {
               break;
