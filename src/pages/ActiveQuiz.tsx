@@ -25,6 +25,7 @@ import WebSocketStatus from "@/components/WebSocketStatus";
 import WebSocketDiagnostics from "@/components/WebSocketDiagnostics";
 
 const COUNTDOWN_DURATION_MS = 3000;
+const QUESTION_TIMER_MS = 30000;
 
 export default function ActiveQuiz() {
   const { sessionId } = useParams();
@@ -48,7 +49,7 @@ export default function ActiveQuiz() {
   const hasNavigatedToStats = useRef(false);
   const [skipIntroSent, setSkipIntroSent] = useState(false);
   // Timer duration based on difficulty – must be declared before any conditional returns
-  const [timerMs, setTimerMs] = useState<number>(30000);
+  const [timerMs, setTimerMs] = useState<number | undefined>(undefined);
 
   // Use the new real-time game updates hook
   const {
@@ -80,11 +81,15 @@ export default function ActiveQuiz() {
   const wsGameMetadata = (wsGameState as any)?.game_state;
   const questionEndsAt =
     wsQuestion?.question_ends_at ??
+    wsQuestion?.question_end_at ??
     wsQuestion?.ends_at ??
     wsQuestion?.end_at ??
+    wsQuestion?.expires_at ??
     wsGameMetadata?.question_ends_at ??
+    wsGameMetadata?.question_end_at ??
     wsGameMetadata?.ends_at ??
     wsGameMetadata?.end_at ??
+    wsGameMetadata?.expires_at ??
     null;
   const introEventId = (wsGameState as any)?.introEventId as
     | string
@@ -146,13 +151,13 @@ export default function ActiveQuiz() {
     return cleanup;
   }, [attachGestures]);
 
-  // Keep timer in sync with question difficulty
+  // Keep timer in sync with question difficulty. Easy has no timer; timed
+  // modes show the full question window while the backend owns progression.
   useEffect(() => {
     const diff = (question?.difficulty || "Easy") as any;
     const norm = typeof diff === "string" ? diff.toLowerCase() : "easy";
-    if (norm === "hard") setTimerMs(15000);
-    else if (norm === "medium") setTimerMs(20000);
-    else setTimerMs(30000);
+    if (norm === "medium" || norm === "hard") setTimerMs(QUESTION_TIMER_MS);
+    else setTimerMs(undefined);
   }, [question?.difficulty]);
 
   // Determine if intro should run (query param intro=1 on first load)
@@ -717,7 +722,11 @@ export default function ActiveQuiz() {
             </div>
 
             <Timer
-              ms={questionIsVisible && !questionEndsAt ? timerMs : undefined}
+              ms={
+                questionIsVisible && !questionEndsAt && timerMs
+                  ? timerMs
+                  : undefined
+              }
               endsAt={questionIsVisible ? questionEndsAt : null}
               serverOffsetMs={serverOffsetMs}
               keyer={keyer}

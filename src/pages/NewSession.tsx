@@ -211,7 +211,7 @@ export default function NewSession() {
               <option>Hard</option>
             </select>
             <p className="text-xs text-stone-400 mt-2">
-              Easy: no timer, MCQ • Medium: 30s timer, MCQ • Hard: 20s timer,
+              Easy: no timer, MCQ • Medium: 30s timer, MCQ • Hard: 30s timer,
               free‑text
             </p>
           </div>
