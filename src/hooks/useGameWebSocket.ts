@@ -30,6 +30,7 @@ export interface GameState {
   game_state: any | null;
   serverOffsetMs?: number;
   finalScores?: any;
+  fairPlay?: FairPlaySettings;
 }
 
 export interface Player {
@@ -40,6 +41,17 @@ export interface Player {
   player_answered?: boolean;
   answered_current?: boolean;
   score?: number;
+  strike_count?: number;
+  max_strikes?: number;
+  is_frozen?: boolean;
+  frozen_question_id?: string;
+  is_kicked?: boolean;
+  fair_play_reason?: string;
+}
+
+export interface FairPlaySettings {
+  cheat_detection_enabled: boolean;
+  max_cheat_strikes: number;
 }
 
 export interface UseGameWebSocketOptions extends Omit<
@@ -277,8 +289,32 @@ export const useGameWebSocket = (
           connected_at: pl.connected_at || pl.timestamp,
           answered_current: pl.answered_current ?? pl.answered ?? false,
           score: pl.score,
+          strike_count: pl.strike_count ?? pl.fair_play_strikes,
+          max_strikes: pl.max_strikes,
+          is_frozen: pl.is_frozen ?? pl.frozen_for_question,
+          frozen_question_id: pl.frozen_question_id,
+          is_kicked: pl.is_kicked,
+          fair_play_reason: pl.fair_play_reason ?? pl.reason,
         })) as Player[];
       };
+
+      const normalizeFairPlaySettings = (raw: any): FairPlaySettings => ({
+        cheat_detection_enabled: Boolean(
+          raw?.cheat_detection_enabled ?? raw?.fair_play_enabled ?? false,
+        ),
+        max_cheat_strikes: Number(
+          raw?.max_cheat_strikes ?? raw?.max_strikes ?? 3,
+        ),
+      });
+
+      const hasFairPlaySettings = (raw: any): boolean =>
+        Boolean(
+          raw &&
+            ("cheat_detection_enabled" in raw ||
+              "fair_play_enabled" in raw ||
+              "max_cheat_strikes" in raw ||
+              "max_strikes" in raw),
+        );
 
       const applyAuthoritativeState = (raw: any) => {
         if (!raw) return;
@@ -366,6 +402,15 @@ export const useGameWebSocket = (
               state.scores ??
               base.finalScores ??
               [],
+            fairPlay: hasFairPlaySettings(state)
+              ? {
+                  ...(base.fairPlay || {
+                    cheat_detection_enabled: false,
+                    max_cheat_strikes: 3,
+                  }),
+                  ...normalizeFairPlaySettings(state),
+                }
+              : base.fairPlay,
           };
         });
 
@@ -992,6 +1037,99 @@ export const useGameWebSocket = (
 
         case "ui_update":
           onUIUpdate?.(message.data);
+          break;
+
+        case "fair_play_settings_updated":
+          setGameState((prev) => {
+            const base: GameState =
+              prev ||
+              ({
+                sessionCode,
+                gameType: "trivia",
+                isActive: false,
+                currentQuestion: null,
+                connectedPlayers: [],
+                game_state: null,
+              } as GameState);
+
+            return {
+              ...base,
+              fairPlay: normalizeFairPlaySettings(message.data),
+              game_state: {
+                ...(base.game_state || {}),
+                ...message.data,
+              },
+            };
+          });
+          break;
+
+        case "fair_play_status_update":
+        case "player_flagged":
+        case "player_kicked":
+          if (message.data?.player_id) {
+            setGameState((prev) => {
+              const base: GameState =
+                prev ||
+                ({
+                  sessionCode,
+                  gameType: "trivia",
+                  isActive: true,
+                  currentQuestion: null,
+                  connectedPlayers: [],
+                  game_state: null,
+                } as GameState);
+              const maxStrikes =
+                message.data.max_strikes ??
+                message.data.max_cheat_strikes ??
+                base.fairPlay?.max_cheat_strikes;
+
+              return {
+                ...base,
+                connectedPlayers: base.connectedPlayers.map((player) =>
+                  player.player_id === message.data.player_id
+                    ? {
+                        ...player,
+                        strike_count:
+                          message.data.strike_count ?? player.strike_count,
+                        max_strikes: maxStrikes ?? player.max_strikes,
+                        is_frozen:
+                          message.type === "player_flagged"
+                            ? true
+                            : (message.data.is_frozen ?? player.is_frozen),
+                        frozen_question_id:
+                          message.data.frozen_question_id ??
+                          message.data.question_id ??
+                          player.frozen_question_id,
+                        is_kicked:
+                          message.type === "player_kicked"
+                            ? true
+                            : (message.data.is_kicked ?? player.is_kicked),
+                        fair_play_reason:
+                          message.data.reason ?? player.fair_play_reason,
+                      }
+                    : player,
+                ),
+                game_state: {
+                  ...(base.game_state || {}),
+                  last_fair_play_event: message.data,
+                },
+              };
+            });
+          }
+          break;
+
+        case "kicked_from_session":
+          setGameState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  game_state: {
+                    ...(prev.game_state || {}),
+                    kicked_from_session: message.data,
+                  },
+                }
+              : prev,
+          );
           break;
 
         case "session_stats":

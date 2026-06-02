@@ -623,6 +623,9 @@ export default function ActiveQuiz() {
     (connectedPlayers && connectedPlayers.length > 0
       ? connectedPlayers
       : players) || [];
+  const fairPlay = (wsGameState as any)?.fairPlay;
+  const fairPlayEnabled = Boolean(fairPlay?.cheat_detection_enabled);
+  const maxFairPlayStrikes = Number(fairPlay?.max_cheat_strikes ?? 3);
 
   // Compute answered players using server-provided counts when available,
   // otherwise fall back to per-player answered flags.
@@ -807,9 +810,16 @@ export default function ActiveQuiz() {
             <Card className="p-6">
               <div className="text-lg font-semibold mb-4 flex items-center justify-between">
                 <span>Leaderboard</span>
-                <span className="text-sm font-normal text-stone-400">
-                  {playersAnswered}/{displayPlayers.length} answered
-                </span>
+                <div className="flex items-center gap-2 text-sm font-normal">
+                  {fairPlayEnabled && (
+                    <span className="rounded-full bg-amber-900/30 px-2 py-1 text-xs text-amber-300">
+                      Fair Play
+                    </span>
+                  )}
+                  <span className="text-stone-400">
+                    {playersAnswered}/{displayPlayers.length} answered
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -818,6 +828,14 @@ export default function ActiveQuiz() {
                     (p as any).player_answered ||
                     (p as any).answered_current ||
                     (p as any).answeredCurrent;
+                  const strikeCount =
+                    typeof p.strike_count === "number"
+                      ? p.strike_count
+                      : null;
+                  const maxStrikes =
+                    typeof p.max_strikes === "number"
+                      ? p.max_strikes
+                      : maxFairPlayStrikes;
                   return (
                     <div
                       key={p.player_id}
@@ -828,7 +846,21 @@ export default function ActiveQuiz() {
                       }`}
                     >
                       <div className="font-medium">{p.player_name}</div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {p.is_kicked ? (
+                          <span className="rounded-full bg-red-900/40 px-2 py-1 text-xs text-red-300">
+                            Removed
+                          </span>
+                        ) : p.is_frozen ? (
+                          <span className="rounded-full bg-amber-900/40 px-2 py-1 text-xs text-amber-300">
+                            Frozen
+                          </span>
+                        ) : null}
+                        {strikeCount !== null && (
+                          <span className="rounded-full bg-ink-800 px-2 py-1 text-xs text-stone-300">
+                            Strike {strikeCount}/{maxStrikes}
+                          </span>
+                        )}
                         <div
                           className={`text-sm ${
                             hasAnswered ? "text-green-300" : "text-stone-400"

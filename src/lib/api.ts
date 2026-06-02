@@ -501,6 +501,8 @@ export interface CreateSessionRequest {
   number_of_questions?: number;
   ispublic: boolean;
   difficulty: string;
+  cheat_detection_enabled?: boolean;
+  max_cheat_strikes?: number;
 }
 
 export interface SubmitAnswerRequest {
@@ -712,6 +714,8 @@ export async function createSession(
     host_name: data.host_name ?? "Host",
     number_of_questions: data.number_of_questions ?? 5,
     difficulty: data.difficulty ?? "Easy",
+    cheat_detection_enabled: data.cheat_detection_enabled ?? false,
+    max_cheat_strikes: data.max_cheat_strikes ?? 3,
   };
 
   const raw = await apiFetch<BackendGameSession>("/game/create/session", {

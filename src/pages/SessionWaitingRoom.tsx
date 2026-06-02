@@ -15,13 +15,18 @@ export default function SessionWaitingRoom() {
   const { showError, showSuccess } = useToast();
   const [isStarting, setIsStarting] = useState(false);
   const [isLoadingRoster, setIsLoadingRoster] = useState(true);
+  const [fairPlayEnabled, setFairPlayEnabled] = useState(false);
+  const [maxFairPlayStrikes, setMaxFairPlayStrikes] = useState(3);
   const manualRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSentFairPlayRef = useRef<string | null>(null);
 
   const {
     game_status,
+    game_state,
     isConnected,
     connectedPlayers,
     startGame: wsStartGame,
+    sendMessage,
     refreshConnection,
   } = useGameUpdates({
     sessionCode: sessionCode || "",
@@ -43,6 +48,63 @@ export default function SessionWaitingRoom() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!sessionCode || typeof window === "undefined") return;
+
+    try {
+      const raw = window.sessionStorage.getItem(
+        `phunparty:fair-play:${sessionCode}`,
+      );
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw);
+      setFairPlayEnabled(Boolean(parsed.cheat_detection_enabled));
+      setMaxFairPlayStrikes(Number(parsed.max_cheat_strikes ?? 3));
+    } catch {
+      // Ignore malformed persisted settings.
+    }
+  }, [sessionCode]);
+
+  useEffect(() => {
+    const settings = game_state?.fairPlay;
+    if (!settings) return;
+
+    setFairPlayEnabled(Boolean(settings.cheat_detection_enabled));
+    setMaxFairPlayStrikes(Number(settings.max_cheat_strikes ?? 3));
+  }, [game_state?.fairPlay]);
+
+  useEffect(() => {
+    if (!isConnected || !sendMessage || !sessionCode) return;
+
+    const payload = {
+      cheat_detection_enabled: fairPlayEnabled,
+      max_cheat_strikes: maxFairPlayStrikes,
+    };
+    const signature = JSON.stringify(payload);
+    if (lastSentFairPlayRef.current === signature) return;
+
+    lastSentFairPlayRef.current = signature;
+    sendMessage({
+      type: "update_session_settings",
+      data: payload,
+    });
+
+    try {
+      window.sessionStorage.setItem(
+        `phunparty:fair-play:${sessionCode}`,
+        signature,
+      );
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [
+    fairPlayEnabled,
+    isConnected,
+    maxFairPlayStrikes,
+    sendMessage,
+    sessionCode,
+  ]);
 
   // We intentionally do NOT auto-redirect anymore so the host can wait even if backend marks session active.
 
@@ -203,6 +265,44 @@ export default function SessionWaitingRoom() {
                 </LoadingButton>
               </div>
             )}
+            <div className="space-y-3 rounded-xl border border-ink-700 bg-ink-800/60 p-4">
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={fairPlayEnabled}
+                  onChange={(event) =>
+                    setFairPlayEnabled(event.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 rounded border-ink-600 bg-ink-700 text-tea-500 focus:ring-tea-500"
+                />
+                <span>
+                  <span className="block font-medium text-stone-200">
+                    Fair Play Mode
+                  </span>
+                  <span className="block text-xs text-stone-400">
+                    Flags focus changes from player phones and applies strikes
+                    during live questions.
+                  </span>
+                </span>
+              </label>
+              {fairPlayEnabled && (
+                <label className="block text-sm text-stone-300">
+                  Strikes before removal
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={maxFairPlayStrikes}
+                    onChange={(event) =>
+                      setMaxFairPlayStrikes(
+                        Math.max(1, Math.min(10, Number(event.target.value))),
+                      )
+                    }
+                    className="mt-2 w-24 rounded-xl border border-ink-600 bg-ink-700 px-3 py-2 text-stone-100 outline-none focus:ring-2 focus:ring-tea-500"
+                  />
+                </label>
+              )}
+            </div>
           </div>
           <div className="w-56 self-start">
             {isConnected ? (
@@ -249,9 +349,28 @@ export default function SessionWaitingRoom() {
               {connectedPlayers.map((p) => (
                 <div
                   key={p.player_id}
-                  className="px-4 py-2 bg-ink-800 rounded-xl flex justify-between items-center"
+                  className="px-4 py-2 bg-ink-800 rounded-xl flex justify-between items-center gap-3"
                 >
                   <span>{p.player_name || p.player_id}</span>
+                  <div className="flex flex-wrap justify-end gap-2 text-xs">
+                    {p.is_kicked ? (
+                      <span className="rounded-full bg-red-900/40 px-2 py-1 text-red-300">
+                        Removed
+                      </span>
+                    ) : p.is_frozen ? (
+                      <span className="rounded-full bg-amber-900/40 px-2 py-1 text-amber-300">
+                        Frozen
+                      </span>
+                    ) : null}
+                    {typeof p.strike_count === "number" && (
+                      <span className="rounded-full bg-ink-700 px-2 py-1 text-stone-300">
+                        Strike {p.strike_count}/
+                        {typeof p.max_strikes === "number"
+                          ? p.max_strikes
+                          : maxFairPlayStrikes}
+                      </span>
+                    )}
+                  </div>
                   {p.connected_at && (
                     <span className="text-xs text-tea-400">✓ Ready</span>
                   )}
