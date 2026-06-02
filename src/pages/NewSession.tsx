@@ -241,7 +241,10 @@ export default function NewSession() {
               </span>
               <span className="block text-xs text-stone-400 mt-1">
                 Players must stay on the answer screen during each question.
-                Leaving the app or switching screens gives a strike.
+                Leaving the app or switching screens gives a strike. After you
+                exhaust all strikes, you are removed from the session. This
+                helps prevent cheating by looking up answers or sharing them
+                outside the app.
               </span>
             </span>
           </label>
