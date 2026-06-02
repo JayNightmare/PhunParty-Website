@@ -44,6 +44,7 @@ export type WebSocketMessageType =
   | "request_current_question"
   | "update_session_settings"
   | "focus_violation"
+  | "answer_rejected"
   | "fair_play_settings_updated"
   | "fair_play_status_update"
   | "player_flagged"
@@ -272,7 +273,11 @@ const useWebSocket = (
         }, 15000); // 15s heartbeat
       };
 
-      wsRef.current.onclose = () => {
+      wsRef.current.onclose = (event) => {
+        if (event.code === 4003) {
+          shouldReconnectRef.current = false;
+        }
+
         setIsConnected(false);
         onDisconnect?.();
 
@@ -356,6 +361,21 @@ const useWebSocket = (
           }
 
           onMessage?.(message);
+
+          if (message.type === "kicked_from_session") {
+            shouldReconnectRef.current = false;
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current);
+              reconnectTimeoutRef.current = null;
+            }
+            setIsReconnecting(false);
+            setConnectionState("disconnected");
+            try {
+              wsRef.current?.close(4003, "Removed after Fair Play strikes");
+            } catch {
+              // Ignore close errors.
+            }
+          }
         } catch (error) {
           console.error("Failed to parse WebSocket message:", error);
         }
