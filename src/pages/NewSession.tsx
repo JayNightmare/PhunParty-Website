@@ -240,11 +240,10 @@ export default function NewSession() {
                 Fair Play Mode
               </span>
               <span className="block text-xs text-stone-400 mt-1">
-                Players must stay on the answer screen during each question.
-                Leaving the app or switching screens gives a strike. After you
-                exhaust all strikes, you are removed from the session. This
-                helps prevent cheating by looking up answers or sharing them
-                outside the app.
+                Fair Play Mode helps reduce cheating by requiring players to
+                stay on the answer screen. Leaving the app or switching screens
+                awards a strike; running out of strikes removes you from the
+                session.
               </span>
             </span>
           </label>
