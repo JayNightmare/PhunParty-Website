@@ -48,6 +48,7 @@ export interface Player {
   is_frozen?: boolean;
   frozen_question_id?: string;
   is_kicked?: boolean;
+  is_disconnected?: boolean;
   fair_play_reason?: string;
 }
 
@@ -285,6 +286,7 @@ export const useGameWebSocket = (
             ...incomingPlayer,
             player_name:
               incomingPlayer.player_name || existingPlayer.player_name,
+            is_disconnected: incomingPlayer.is_disconnected ?? false,
             strike_count:
               incomingPlayer.strike_count ?? existingPlayer.strike_count,
             max_strikes: incomingPlayer.max_strikes ?? existingPlayer.max_strikes,
@@ -345,6 +347,7 @@ export const useGameWebSocket = (
           is_frozen: pl.is_frozen ?? pl.frozen_for_question,
           frozen_question_id: pl.frozen_question_id,
           is_kicked: pl.is_kicked ?? pl.kicked ?? pl.removed,
+          is_disconnected: pl.is_disconnected ?? pl.disconnected ?? false,
           fair_play_reason: pl.fair_play_reason ?? pl.reason,
         })) as Player[];
       };
@@ -372,6 +375,38 @@ export const useGameWebSocket = (
 
       const getMaxStrikes = (raw: any): number | undefined =>
         raw?.max_strikes ?? raw?.max_cheat_strikes ?? raw?.strike_limit;
+
+      const shouldPreserveRosterDuringFairPlay = (
+        state: GameState,
+      ): boolean =>
+        Boolean(
+          state.fairPlay?.cheat_detection_enabled &&
+            (state.phase === "question" ||
+              state.game_state?.phase === "question" ||
+              state.game_state?.game_state === "active" ||
+              state.currentQuestion) &&
+            state.isActive,
+        );
+
+      const preserveMissingFairPlayPlayers = (
+        existing: Player[],
+        incoming: Player[],
+        state: GameState,
+      ): Player[] => {
+        if (!shouldPreserveRosterDuringFairPlay(state)) return incoming;
+
+        const incomingIds = new Set(incoming.map((player) => player.player_id));
+        const preserved = existing
+          .filter(
+            (player) => !player.is_kicked && !incomingIds.has(player.player_id),
+          )
+          .map((player) => ({
+            ...player,
+            is_disconnected: true,
+          }));
+
+        return [...incoming, ...preserved];
+      };
 
       const applyAuthoritativeState = (raw: any) => {
         if (!raw) return;
@@ -452,8 +487,13 @@ export const useGameWebSocket = (
                   }
                 : null,
             connectedPlayers: hasAuthoritativePlayers
-              ? mergePlayers(base.connectedPlayers, incomingActivePlayers).filter(
-                  (player) => !player.is_kicked,
+              ? preserveMissingFairPlayPlayers(
+                  base.connectedPlayers,
+                  mergePlayers(
+                    base.connectedPlayers,
+                    incomingActivePlayers,
+                  ).filter((player) => !player.is_kicked),
+                  base,
                 )
               : base.connectedPlayers,
             removedPlayers: hasAuthoritativePlayers
@@ -655,6 +695,11 @@ export const useGameWebSocket = (
                 base.connectedPlayers,
                 incomingPlayers.filter((player) => !player.is_kicked),
               ).filter((player) => !player.is_kicked);
+              connectedPlayers = preserveMissingFairPlayPlayers(
+                base.connectedPlayers,
+                connectedPlayers,
+                base,
+              );
               removedPlayers = mergeRemovedPlayers(
                 base.removedPlayers,
                 kickedPlayers,
@@ -711,6 +756,11 @@ export const useGameWebSocket = (
                 base.connectedPlayers,
                 incomingPlayers.filter((player) => !player.is_kicked),
               ).filter((player) => !player.is_kicked);
+              connectedPlayers = preserveMissingFairPlayPlayers(
+                base.connectedPlayers,
+                connectedPlayers,
+                base,
+              );
               removedPlayers = mergeRemovedPlayers(
                 base.removedPlayers,
                 kickedPlayers,
@@ -788,7 +838,15 @@ export const useGameWebSocket = (
               return {
                 ...base,
                 connectedPlayers: exists
-                  ? base.connectedPlayers
+                  ? base.connectedPlayers.map((existingPlayer) =>
+                      existingPlayer.player_id === player.player_id
+                        ? {
+                            ...existingPlayer,
+                            ...player,
+                            is_disconnected: false,
+                          }
+                        : existingPlayer,
+                    )
                   : [...base.connectedPlayers, player],
               };
             });
@@ -799,6 +857,7 @@ export const useGameWebSocket = (
 
         case "player_left":
           if (message.data) {
+            let shouldNotifyPlayerLeft = true;
             setGameState((prev) => {
               const base: GameState =
                 prev ||
@@ -810,6 +869,26 @@ export const useGameWebSocket = (
                   connectedPlayers: [],
                   game_state: null,
                 } as GameState);
+
+              if (shouldPreserveRosterDuringFairPlay(base)) {
+                shouldNotifyPlayerLeft = false;
+                return {
+                  ...base,
+                  connectedPlayers: base.connectedPlayers.map((player) =>
+                    player.player_id === message.data.player_id
+                      ? {
+                          ...player,
+                          is_disconnected: true,
+                        }
+                      : player,
+                  ),
+                  game_state: {
+                    ...(base.game_state || {}),
+                    last_player_left_suppressed_for_fair_play: message.data,
+                  },
+                };
+              }
+
               return {
                 ...base,
                 connectedPlayers: base.connectedPlayers.filter(
@@ -818,7 +897,9 @@ export const useGameWebSocket = (
               };
             });
 
-            onPlayerLeft?.(message.data.player_id);
+            if (shouldNotifyPlayerLeft) {
+              onPlayerLeft?.(message.data.player_id);
+            }
           }
           break;
 
@@ -1423,10 +1504,14 @@ export const useGameWebSocket = (
               prev
                 ? {
                     ...prev,
-                    connectedPlayers: mergePlayers(
+                    connectedPlayers: preserveMissingFairPlayPlayers(
                       prev.connectedPlayers,
-                      activePlayers,
-                    ).filter((player) => !player.is_kicked),
+                      mergePlayers(
+                        prev.connectedPlayers,
+                        activePlayers,
+                      ).filter((player) => !player.is_kicked),
+                      prev,
+                    ),
                     removedPlayers: mergeRemovedPlayers(
                       prev.removedPlayers,
                       kickedPlayers,

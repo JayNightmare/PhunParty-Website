@@ -872,6 +872,10 @@ export default function ActiveQuiz() {
                           <span className="rounded-full bg-amber-900/40 px-2 py-1 text-xs text-amber-300">
                             Frozen
                           </span>
+                        ) : p.is_disconnected ? (
+                          <span className="rounded-full bg-stone-800 px-2 py-1 text-xs text-stone-300">
+                            Disconnected
+                          </span>
                         ) : null}
                         {strikeCount !== null && (
                           <span className="rounded-full bg-ink-800 px-2 py-1 text-xs text-stone-300">
