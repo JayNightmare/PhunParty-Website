@@ -922,10 +922,10 @@ export default function ActiveQuiz() {
                           key={player.player_id}
                           className="flex items-center justify-between rounded-xl bg-red-900/20 border border-red-500/20 px-3 py-2"
                         >
-                          <span className="font-medium">
-                            {player.player_name || player.player_id}
+                          <span className="font-medium truncate pr-3">
+                            {player.player_name || "Removed player"}
                           </span>
-                          <span className="text-xs text-red-300">
+                          <span className="text-xs text-red-300 shrink-0">
                             Removed after {strikeCount}/{maxStrikes} strikes
                           </span>
                         </div>

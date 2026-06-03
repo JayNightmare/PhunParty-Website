@@ -376,6 +376,32 @@ export const useGameWebSocket = (
       const getMaxStrikes = (raw: any): number | undefined =>
         raw?.max_strikes ?? raw?.max_cheat_strikes ?? raw?.strike_limit;
 
+      const findKnownPlayer = (
+        state: GameState,
+        playerIdToFind: string,
+      ): Player | undefined =>
+        state.connectedPlayers.find(
+          (player) => player.player_id === playerIdToFind,
+        ) ||
+        state.removedPlayers?.find(
+          (player) => player.player_id === playerIdToFind,
+        ) ||
+        ((state.game_state?.last_fair_play_event?.player_id === playerIdToFind
+          ? {
+              player_id: playerIdToFind,
+              player_name:
+                state.game_state.last_fair_play_event.player_name ||
+                playerIdToFind,
+              strike_count: getStrikeCount(
+                state.game_state.last_fair_play_event,
+              ),
+              max_strikes: getMaxStrikes(state.game_state.last_fair_play_event),
+              fair_play_reason:
+                state.game_state.last_fair_play_event.reason ||
+                state.game_state.last_fair_play_event.fair_play_reason,
+            }
+          : undefined) as Player | undefined);
+
       const shouldPreserveRosterDuringFairPlay = (
         state: GameState,
       ): boolean =>
@@ -1291,33 +1317,60 @@ export const useGameWebSocket = (
               const maxStrikes =
                 getMaxStrikes(message.data) ??
                 base.fairPlay?.max_cheat_strikes;
+              const isKicked = Boolean(message.data.is_kicked);
+              const knownPlayer: Player = findKnownPlayer(
+                base,
+                message.data.player_id,
+              ) || {
+                player_id: message.data.player_id,
+                player_name:
+                  message.data.player_name || message.data.player_id,
+              };
+              const updatedPlayer: Player = {
+                ...knownPlayer,
+                player_id: message.data.player_id,
+                player_name:
+                  message.data.player_name ||
+                  knownPlayer.player_name ||
+                  message.data.player_id,
+                strike_count: strikeCount ?? knownPlayer.strike_count,
+                max_strikes: maxStrikes ?? knownPlayer.max_strikes,
+                is_frozen:
+                  message.type === "player_flagged"
+                    ? true
+                    : (message.data.is_frozen ??
+                      message.data.frozen_for_question ??
+                      knownPlayer.is_frozen),
+                frozen_question_id:
+                  message.data.frozen_question_id ??
+                  message.data.question_id ??
+                  knownPlayer.frozen_question_id,
+                is_kicked: isKicked || knownPlayer.is_kicked,
+                fair_play_reason:
+                  message.data.reason ??
+                  message.data.fair_play_reason ??
+                  knownPlayer.fair_play_reason,
+              };
+              const playerAlreadyVisible = base.connectedPlayers.some(
+                (player) => player.player_id === message.data.player_id,
+              );
 
               return {
                 ...base,
-                connectedPlayers: base.connectedPlayers.map((player) =>
-                  player.player_id === message.data.player_id
-                    ? {
-                        ...player,
-                        strike_count:
-                          strikeCount ?? player.strike_count,
-                        max_strikes: maxStrikes ?? player.max_strikes,
-                        is_frozen:
-                          message.type === "player_flagged"
-                            ? true
-                            : (message.data.is_frozen ??
-                              message.data.frozen_for_question ??
-                              player.is_frozen),
-                        frozen_question_id:
-                          message.data.frozen_question_id ??
-                          message.data.question_id ??
-                          player.frozen_question_id,
-                        is_kicked:
-                          message.data.is_kicked ?? player.is_kicked,
-                        fair_play_reason:
-                          message.data.reason ?? player.fair_play_reason,
-                      }
-                    : player,
-                ),
+                connectedPlayers: isKicked
+                  ? base.connectedPlayers.filter(
+                      (player) => player.player_id !== message.data.player_id,
+                    )
+                  : playerAlreadyVisible
+                    ? base.connectedPlayers.map((player) =>
+                        player.player_id === message.data.player_id
+                          ? updatedPlayer
+                          : player,
+                      )
+                    : [...base.connectedPlayers, updatedPlayer],
+                removedPlayers: isKicked
+                  ? mergeRemovedPlayers(base.removedPlayers, [updatedPlayer])
+                  : base.removedPlayers,
                 game_state: {
                   ...(base.game_state || {}),
                   last_fair_play_event: message.data,
@@ -1343,9 +1396,7 @@ export const useGameWebSocket = (
 
               const kickedSelf = message.data.player_id === playerId;
               const kickedPlayer =
-                base.connectedPlayers.find(
-                  (player) => player.player_id === message.data.player_id,
-                ) ||
+                findKnownPlayer(base, message.data.player_id) ||
                 ({
                   player_id: message.data.player_id,
                   player_name:
@@ -1387,8 +1438,6 @@ export const useGameWebSocket = (
                 },
               };
             });
-
-            onPlayerLeft?.(message.data.player_id);
           }
           break;
 
