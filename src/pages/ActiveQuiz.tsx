@@ -619,11 +619,22 @@ export default function ActiveQuiz() {
   const keyer = `${sessionId}-${question?.id}`;
 
   // Determine which players to display: prefer live WS list
-  const displayPlayers =
-    ((connectedPlayers && connectedPlayers.length > 0
+  const rawDisplayPlayers =
+    (connectedPlayers && connectedPlayers.length > 0
       ? connectedPlayers
-      : players) || []
-    ).filter((player) => !player.is_kicked);
+      : players) || [];
+  const displayPlayers = rawDisplayPlayers.filter(
+    (player) => !player.is_kicked,
+  );
+  const removedPlayers = Array.from(
+    new Map(
+      [
+        ...(((wsGameState as any)?.removedPlayers as Player[] | undefined) ||
+          []),
+        ...rawDisplayPlayers.filter((player) => player.is_kicked),
+      ].map((player) => [player.player_id, player]),
+    ).values(),
+  );
   const fairPlay = (wsGameState as any)?.fairPlay;
   const fairPlayEnabled = Boolean(fairPlay?.cheat_detection_enabled);
   const maxFairPlayStrikes = Number(fairPlay?.max_cheat_strikes ?? 3);
@@ -631,8 +642,13 @@ export default function ActiveQuiz() {
   // Compute answered players using server-provided counts when available,
   // otherwise fall back to per-player answered flags.
   const playersAnswered =
-    game_status?.player_response_counts?.answered ??
-    players.filter((p: any) => p.answered_current || p.answeredCurrent).length;
+    Math.min(
+      displayPlayers.length,
+      game_status?.player_response_counts?.answered ??
+        displayPlayers.filter(
+          (p: any) => p.answered_current || p.answeredCurrent,
+        ).length,
+    );
 
   // Intro screen overlay
   if (introMode) {
@@ -880,6 +896,40 @@ export default function ActiveQuiz() {
                   </div>
                 )}
               </div>
+
+              {removedPlayers.length > 0 && (
+                <div className="mt-5 border-t border-ink-700 pt-4">
+                  <div className="text-sm font-semibold text-red-300 mb-2">
+                    Removed
+                  </div>
+                  <div className="space-y-2">
+                    {removedPlayers.map((player) => {
+                      const strikeCount =
+                        typeof player.strike_count === "number"
+                          ? player.strike_count
+                          : maxFairPlayStrikes;
+                      const maxStrikes =
+                        typeof player.max_strikes === "number"
+                          ? player.max_strikes
+                          : maxFairPlayStrikes;
+
+                      return (
+                        <div
+                          key={player.player_id}
+                          className="flex items-center justify-between rounded-xl bg-red-900/20 border border-red-500/20 px-3 py-2"
+                        >
+                          <span className="font-medium">
+                            {player.player_name || player.player_id}
+                          </span>
+                          <span className="text-xs text-red-300">
+                            Removed after {strikeCount}/{maxStrikes} strikes
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </Card>
           </section>
 

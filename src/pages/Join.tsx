@@ -38,6 +38,7 @@ export default function Join() {
   } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [nameTrigger, setNameTrigger] = useState(false);
+  const [fairPlayGraceActive, setFairPlayGraceActive] = useState(false);
 
   const getStoredUser = () => {
     const raw = localStorage.getItem("auth_user");
@@ -270,6 +271,7 @@ export default function Join() {
     setHasSubmitted(false);
     setVal("");
     fairPlayReportedQuestionRef.current = null;
+    setFairPlayGraceActive(false);
   }, [question?.id]);
 
   useEffect(() => {
@@ -287,12 +289,13 @@ export default function Join() {
       return;
     }
 
-    const reportViolation = (reason: string) => {
+    const reportFocusLost = (reason: string) => {
       if (fairPlayReportedQuestionRef.current === question.id) return;
 
       fairPlayReportedQuestionRef.current = question.id;
+      setFairPlayGraceActive(true);
       sendMessage({
-        type: "focus_violation",
+        type: "fair_play_focus_lost",
         data: {
           session_code: sessionId,
           question_id: question.id,
@@ -302,22 +305,48 @@ export default function Join() {
       });
     };
 
+    const reportFocusReturned = () => {
+      if (fairPlayReportedQuestionRef.current !== question.id) return;
+
+      fairPlayReportedQuestionRef.current = null;
+      setFairPlayGraceActive(false);
+      sendMessage({
+        type: "fair_play_focus_returned",
+        data: {
+          session_code: sessionId,
+          question_id: question.id,
+          returned_at: new Date().toISOString(),
+        },
+      });
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        reportViolation("app_backgrounded");
+        reportFocusLost("app_backgrounded");
+      }
+      if (document.visibilityState === "visible") {
+        reportFocusReturned();
       }
     };
 
     const handlePageHide = () => {
-      reportViolation("screen_blurred");
+      reportFocusLost("screen_blurred");
+    };
+
+    const handlePageShow = () => {
+      reportFocusReturned();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("focus", handlePageShow);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("focus", handlePageShow);
     };
   }, [
     fairPlayEnabled,
@@ -326,6 +355,46 @@ export default function Join() {
     isJoined,
     isKicked,
     question?.id,
+    questionIsVisible,
+    sendMessage,
+    sessionId,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isJoined ||
+      !isConnected ||
+      !sendMessage ||
+      !sessionId ||
+      !questionIsVisible ||
+      question ||
+      isKicked
+    ) {
+      return;
+    }
+
+    const retryDelaysMs = [500, 1500, 3000];
+    const timers = retryDelaysMs.map((delayMs) =>
+      setTimeout(() => {
+        sendMessage({
+          type: "request_current_question",
+          data: {
+            session_code: sessionId,
+            player_id: myId,
+          },
+        });
+      }, delayMs),
+    );
+
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, [
+    isConnected,
+    isJoined,
+    isKicked,
+    myId,
+    question,
     questionIsVisible,
     sendMessage,
     sessionId,
@@ -658,6 +727,12 @@ export default function Join() {
                 <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-900/20 p-3 text-sm text-amber-200">
                   Fair Play Mode is on. Strikes: {strikeCount ?? 0}/
                   {maxFairPlayStrikes}
+                </div>
+              )}
+              {fairPlayGraceActive && !isFrozen && !isKicked && (
+                <div className="mb-4 rounded-xl border border-peach-500/40 bg-peach-900/20 p-3 text-sm text-peach-200">
+                  Return to the game within the grace period to avoid a Fair
+                  Play strike.
                 </div>
               )}
               <div className="text-sm text-stone-400 mb-4">

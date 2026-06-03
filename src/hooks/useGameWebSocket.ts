@@ -31,6 +31,8 @@ export interface GameState {
   serverOffsetMs?: number;
   finalScores?: any;
   fairPlay?: FairPlaySettings;
+  removedPlayers?: Player[];
+  buzzerState?: BuzzerState | null;
 }
 
 export interface Player {
@@ -52,6 +54,14 @@ export interface Player {
 export interface FairPlaySettings {
   cheat_detection_enabled: boolean;
   max_cheat_strikes: number;
+}
+
+export interface BuzzerState {
+  question_id?: string;
+  current_buzzer_winner?: string | null;
+  frozen_players?: string[];
+  question_active?: boolean;
+  server_time_ms?: number;
 }
 
 export interface UseGameWebSocketOptions extends Omit<
@@ -300,6 +310,26 @@ export const useGameWebSocket = (
             frozen_question_id: undefined,
           }));
 
+      const mergeRemovedPlayers = (
+        existing: Player[] | undefined,
+        incoming: Player[],
+      ): Player[] => {
+        const byId = new Map<string, Player>();
+        (existing || []).forEach((player) =>
+          byId.set(player.player_id, player),
+        );
+        incoming.forEach((player) => {
+          const old = byId.get(player.player_id);
+          byId.set(player.player_id, {
+            ...old,
+            ...player,
+            is_kicked: true,
+            player_name: player.player_name || old?.player_name || player.player_id,
+          });
+        });
+        return Array.from(byId.values());
+      };
+
       const normalizePlayers = (rawPlayers: any[] | undefined): Player[] => {
         if (!Array.isArray(rawPlayers)) return [];
 
@@ -314,7 +344,7 @@ export const useGameWebSocket = (
           max_strikes: pl.max_strikes ?? pl.max_cheat_strikes,
           is_frozen: pl.is_frozen ?? pl.frozen_for_question,
           frozen_question_id: pl.frozen_question_id,
-          is_kicked: pl.is_kicked,
+          is_kicked: pl.is_kicked ?? pl.kicked ?? pl.removed,
           fair_play_reason: pl.fair_play_reason ?? pl.reason,
         })) as Player[];
       };
@@ -360,6 +390,12 @@ export const useGameWebSocket = (
           raw.connected_players ?? state.connected_players ?? state.players;
         const hasAuthoritativePlayers = Array.isArray(rawPlayers);
         const incomingPlayers = normalizePlayers(rawPlayers);
+        const incomingActivePlayers = incomingPlayers.filter(
+          (player) => !player.is_kicked,
+        );
+        const incomingKickedPlayers = incomingPlayers.filter(
+          (player) => player.is_kicked,
+        );
         const normalizedQuestion =
           phase === "question"
             ? extractQuestion(state.current_question ?? state.question)
@@ -416,10 +452,13 @@ export const useGameWebSocket = (
                   }
                 : null,
             connectedPlayers: hasAuthoritativePlayers
-              ? mergePlayers(base.connectedPlayers, incomingPlayers).filter(
+              ? mergePlayers(base.connectedPlayers, incomingActivePlayers).filter(
                   (player) => !player.is_kicked,
                 )
               : base.connectedPlayers,
+            removedPlayers: hasAuthoritativePlayers
+              ? mergeRemovedPlayers(base.removedPlayers, incomingKickedPlayers)
+              : base.removedPlayers,
             game_state: {
               ...(base.game_state || {}),
               ...state,
@@ -469,6 +508,7 @@ export const useGameWebSocket = (
                       base.currentQuestion,
                       normalizedQuestion,
                     ),
+                    buzzerState: null,
                     connectedPlayers: resetPlayersForNewQuestion(
                       base.connectedPlayers,
                     ),
@@ -508,6 +548,7 @@ export const useGameWebSocket = (
               ...base,
               isActive: true,
               currentQuestion: mergedQuestion,
+              buzzerState: null,
               connectedPlayers: resetPlayersForNewQuestion(
                 base.connectedPlayers,
               ),
@@ -539,6 +580,7 @@ export const useGameWebSocket = (
               ...prev,
               isActive: true,
               currentQuestion: mergedQuestion,
+              buzzerState: null,
               connectedPlayers: resetPlayersForNewQuestion(
                 prev.connectedPlayers,
               ),
@@ -603,12 +645,20 @@ export const useGameWebSocket = (
 
             // Merge player list preserving existing names
             let connectedPlayers = base.connectedPlayers;
+            let removedPlayers = base.removedPlayers;
             if (Array.isArray(data.players)) {
               const incomingPlayers = normalizePlayers(data.players);
+              const kickedPlayers = incomingPlayers.filter(
+                (player) => player.is_kicked,
+              );
               connectedPlayers = mergePlayers(
                 base.connectedPlayers,
-                incomingPlayers,
+                incomingPlayers.filter((player) => !player.is_kicked),
               ).filter((player) => !player.is_kicked);
+              removedPlayers = mergeRemovedPlayers(
+                base.removedPlayers,
+                kickedPlayers,
+              );
             }
 
             const mergedQuestion = mergeQuestion(
@@ -621,6 +671,7 @@ export const useGameWebSocket = (
               isActive: data.is_active ?? base.isActive,
               currentQuestion: mergedQuestion,
               connectedPlayers,
+              removedPlayers,
               game_state: data.connection_stats ?? base.game_state,
             };
           });
@@ -650,12 +701,20 @@ export const useGameWebSocket = (
 
             // Merge players if provided
             let connectedPlayers = base.connectedPlayers;
+            let removedPlayers = base.removedPlayers;
             if (Array.isArray(data.players)) {
               const incomingPlayers = normalizePlayers(data.players);
+              const kickedPlayers = incomingPlayers.filter(
+                (player) => player.is_kicked,
+              );
               connectedPlayers = mergePlayers(
                 base.connectedPlayers,
-                incomingPlayers,
+                incomingPlayers.filter((player) => !player.is_kicked),
               ).filter((player) => !player.is_kicked);
+              removedPlayers = mergeRemovedPlayers(
+                base.removedPlayers,
+                kickedPlayers,
+              );
             }
 
             const mergedQuestion = mergeQuestion(
@@ -668,6 +727,7 @@ export const useGameWebSocket = (
               isActive: data.is_active ?? base.isActive,
               currentQuestion: mergedQuestion,
               connectedPlayers,
+              removedPlayers,
               game_state: data.connection_stats ?? base.game_state,
             };
           });
@@ -996,6 +1056,7 @@ export const useGameWebSocket = (
                   isActive: true,
                   isStarted: true,
                   currentQuestion: mergedQuestion,
+                  buzzerState: null,
                   connectedPlayers: resetPlayersForNewQuestion(
                     base.connectedPlayers,
                   ),
@@ -1050,6 +1111,45 @@ export const useGameWebSocket = (
           if (message.data) {
             onBuzzerWinner?.(message.data.player_id, message.data.player_name);
           }
+          break;
+
+        case "buzzer_state_update":
+          updateServerOffset(message.data?.server_time_ms);
+          setGameState((prev) => {
+            const base: GameState =
+              prev ||
+              ({
+                sessionCode,
+                gameType: "buzzer",
+                isActive: true,
+                currentQuestion: null,
+                connectedPlayers: [],
+                game_state: null,
+              } as GameState);
+
+            const buzzerState: BuzzerState = {
+              question_id: message.data?.question_id,
+              current_buzzer_winner:
+                message.data?.current_buzzer_winner ?? null,
+              frozen_players: Array.isArray(message.data?.frozen_players)
+                ? message.data.frozen_players
+                : [],
+              question_active: Boolean(message.data?.question_active),
+              server_time_ms: message.data?.server_time_ms,
+            };
+
+            return {
+              ...base,
+              gameType: "buzzer",
+              buzzerState,
+              game_state: {
+                ...(base.game_state || {}),
+                buzzer_state: buzzerState,
+              },
+              serverOffsetMs: serverOffsetMsRef.current,
+            };
+          });
+          onUIUpdate?.({ type: "buzzer_state_update", ...message.data });
           break;
 
         case "correct_answer":
@@ -1161,12 +1261,34 @@ export const useGameWebSocket = (
                 } as GameState);
 
               const kickedSelf = message.data.player_id === playerId;
+              const kickedPlayer =
+                base.connectedPlayers.find(
+                  (player) => player.player_id === message.data.player_id,
+                ) ||
+                ({
+                  player_id: message.data.player_id,
+                  player_name:
+                    message.data.player_name || message.data.player_id,
+                } as Player);
 
               return {
                 ...base,
                 connectedPlayers: base.connectedPlayers.filter(
                   (player) => player.player_id !== message.data.player_id,
                 ),
+                removedPlayers: mergeRemovedPlayers(base.removedPlayers, [
+                  {
+                    ...kickedPlayer,
+                    strike_count:
+                      getStrikeCount(message.data) ??
+                      kickedPlayer.strike_count,
+                    max_strikes:
+                      getMaxStrikes(message.data) ?? kickedPlayer.max_strikes,
+                    is_kicked: true,
+                    fair_play_reason:
+                      message.data.reason ?? kickedPlayer.fair_play_reason,
+                  },
+                ]),
                 game_state: {
                   ...(base.game_state || {}),
                   last_fair_play_event: message.data,
@@ -1283,6 +1405,12 @@ export const useGameWebSocket = (
             }
 
             const updatedPlayers = normalizePlayers(rawPlayers);
+            const activePlayers = updatedPlayers.filter(
+              (player) => !player.is_kicked,
+            );
+            const kickedPlayers = updatedPlayers.filter(
+              (player) => player.is_kicked,
+            );
 
             if (import.meta.env.DEV) {
               console.debug(
@@ -1297,8 +1425,12 @@ export const useGameWebSocket = (
                     ...prev,
                     connectedPlayers: mergePlayers(
                       prev.connectedPlayers,
-                      updatedPlayers,
+                      activePlayers,
                     ).filter((player) => !player.is_kicked),
+                    removedPlayers: mergeRemovedPlayers(
+                      prev.removedPlayers,
+                      kickedPlayers,
+                    ),
                     game_state: {
                       ...(prev.game_state || {}),
                       ...message.data,
@@ -1309,9 +1441,8 @@ export const useGameWebSocket = (
                     gameType: "trivia",
                     isActive: false,
                     currentQuestion: null,
-                    connectedPlayers: updatedPlayers.filter(
-                      (player) => !player.is_kicked,
-                    ),
+                    connectedPlayers: activePlayers,
+                    removedPlayers: mergeRemovedPlayers([], kickedPlayers),
                     game_state: message.data ?? null,
                   },
             );
@@ -1352,6 +1483,7 @@ export const useGameWebSocket = (
       onIncorrectAnswer,
       onUIUpdate,
       onErrorCallback,
+      playerId,
       updateServerOffset,
       scheduleAtServerTime,
       estimatedServerNowMs,
