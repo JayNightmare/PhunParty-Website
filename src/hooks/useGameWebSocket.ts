@@ -266,6 +266,15 @@ export const useGameWebSocket = (
         return merged;
       };
 
+      const getQuestionIdentity = (question: any | null | undefined): string =>
+        String(
+          question?.question_id ??
+            question?.id ??
+            question?.prompt ??
+            question?.question ??
+            "",
+        );
+
       // Helper to merge player lists preserving known names
       const mergePlayers = (
         existing: Player[],
@@ -286,6 +295,18 @@ export const useGameWebSocket = (
             ...incomingPlayer,
             player_name:
               incomingPlayer.player_name || existingPlayer.player_name,
+            answered_current: Boolean(
+              incomingPlayer.answered_current ||
+                existingPlayer.answered_current ||
+                incomingPlayer.player_answered ||
+                existingPlayer.player_answered,
+            ),
+            player_answered: Boolean(
+              incomingPlayer.player_answered ||
+                existingPlayer.player_answered ||
+                incomingPlayer.answered_current ||
+                existingPlayer.answered_current,
+            ),
             is_disconnected: incomingPlayer.is_disconnected ?? false,
             strike_count:
               incomingPlayer.strike_count ?? existingPlayer.strike_count,
@@ -308,6 +329,7 @@ export const useGameWebSocket = (
           .map((player) => ({
             ...player,
             answered_current: false,
+            player_answered: false,
             is_frozen: false,
             frozen_question_id: undefined,
           }));
@@ -490,6 +512,14 @@ export const useGameWebSocket = (
               connectedPlayers: [],
               game_state: null,
             } as GameState);
+          const questionChanged =
+            phase === "question" &&
+            normalizedQuestion &&
+            getQuestionIdentity(base.currentQuestion) !==
+              getQuestionIdentity(normalizedQuestion);
+          const basePlayers = questionChanged
+            ? resetPlayersForNewQuestion(base.connectedPlayers)
+            : base.connectedPlayers;
 
           return {
             ...base,
@@ -514,14 +544,14 @@ export const useGameWebSocket = (
                 : null,
             connectedPlayers: hasAuthoritativePlayers
               ? preserveMissingFairPlayPlayers(
-                  base.connectedPlayers,
+                  basePlayers,
                   mergePlayers(
-                    base.connectedPlayers,
+                    basePlayers,
                     incomingActivePlayers,
                   ).filter((player) => !player.is_kicked),
                   base,
                 )
-              : base.connectedPlayers,
+              : basePlayers,
             removedPlayers: hasAuthoritativePlayers
               ? mergeRemovedPlayers(base.removedPlayers, incomingKickedPlayers)
               : base.removedPlayers,
