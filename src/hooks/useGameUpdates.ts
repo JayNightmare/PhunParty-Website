@@ -1,5 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import useGameWebSocket, { GameState, Player } from "@/hooks/useGameWebSocket";
+import useGameWebSocket, {
+  GameState,
+  Player,
+  getPlayerKey,
+} from "@/hooks/useGameWebSocket";
 import { getSessionStatus, GameStatusResponse } from "@/lib/api";
 
 const buildRosterCacheKey = (sessionCode: string) =>
@@ -145,7 +149,7 @@ const useGameUpdates = ({
   const handlePlayerLeft = useCallback(
     (playerId: string) => {
       setConnectedPlayers((prev) =>
-        prev.filter((p) => p.player_id !== playerId),
+        prev.filter((p) => getPlayerKey(p) !== playerId && p.player_id !== playerId),
       );
 
       setLastUpdate({
@@ -206,7 +210,9 @@ const useGameUpdates = ({
     (playerId: string, playerName: string) => {
       setConnectedPlayers((prev) =>
         prev.map((p) =>
-          p.player_id === playerId ? { ...p, answered_current: true } : p,
+          getPlayerKey(p) === playerId || p.player_id === playerId
+            ? { ...p, answered_current: true }
+            : p,
         ),
       );
 

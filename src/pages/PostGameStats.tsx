@@ -4,10 +4,8 @@ import { useEffect, useState } from "react";
 import {
   getSessionStatus,
   getScores,
-  getPlayer,
   GameStatusResponse,
   ScoresResponseModel,
-  PlayerResponse,
 } from "@/lib/api";
 
 type ScoreWithPlayer = ScoresResponseModel & {
@@ -32,24 +30,10 @@ export default function PostGameStats() {
         ]);
         if (st) setStatus(st);
         if (sc && sc.length > 0) {
-          console.warn(sc);
-          // Fetch player names for each score
-          const scoresWithNames: ScoreWithPlayer[] = await Promise.all(
-            sc.map(async (score) => {
-              try {
-                const player = await getPlayer(score.player_id);
-                return {
-                  ...score,
-                  name: player.player_name,
-                };
-              } catch {
-                return {
-                  ...score,
-                  name: score.player_id, // Fallback to player ID
-                };
-              }
-            })
-          );
+          const scoresWithNames: ScoreWithPlayer[] = sc.map((score) => ({
+            ...score,
+            name: score.display_name || "Player",
+          }));
           setScores(scoresWithNames);
         }
       } catch (err: any) {
@@ -99,7 +83,7 @@ export default function PostGameStats() {
             <ol className="space-y-2">
               {sorted.map((p, i) => (
                 <li
-                  key={p.player_id}
+                  key={p.score_id || `${p.session_code}-${i}`}
                   className="flex items-center justify-between px-3 py-2 bg-ink-700 rounded-xl"
                 >
                   <div className="text-stone-300">
@@ -124,7 +108,10 @@ export default function PostGameStats() {
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {sorted.map((p) => (
-              <div key={p.player_id} className="bg-ink-700 rounded-xl p-3">
+              <div
+                key={p.score_id || `${p.session_code}-${p.display_name}`}
+                className="bg-ink-700 rounded-xl p-3"
+              >
                 <div className="text-xs text-stone-400">{p.name}</div>
                 <div className="text-2xl font-semibold">{p.score}</div>
               </div>

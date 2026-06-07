@@ -104,11 +104,7 @@ export default function CORSHelper({ onClose }: CORSHelperProps) {
                                         <code className="bg-ink-800 px-1 rounded">
                                             VITE_API_URL
                                         </code>{" "}
-                                        and{" "}
-                                        <code className="bg-ink-800 px-1 rounded">
-                                            VITE_API_KEY
-                                        </code>{" "}
-                                        are set correctly
+                                        is set correctly
                                     </p>
                                 </div>
                                 <div>
@@ -163,13 +159,13 @@ export default function CORSHelper({ onClose }: CORSHelperProps) {
                                         {`# Add to your nginx server block
 add_header 'Access-Control-Allow-Origin' '*' always;
 add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS, PATCH' always;
-add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-API-Key,x-api-key' always;
+add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
 
 # Handle preflight requests
 if ($request_method = 'OPTIONS') {
     add_header 'Access-Control-Allow-Origin' '*' always;
     add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS, PATCH' always;
-    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-API-Key,x-api-key' always;
+    add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
     add_header 'Access-Control-Max-Age' 1728000;
     add_header 'Content-Type' 'text/plain charset=UTF-8';
     add_header 'Content-Length' 0;

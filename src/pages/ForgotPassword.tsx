@@ -15,6 +15,7 @@ export default function ForgotPassword() {
     const { showSuccess, showError } = useToast();
     const [step, setStep] = useState<Step>("phone");
     const [isLoading, setIsLoading] = useState(false);
+    const [resetToken, setResetToken] = useState("");
     const [formData, setFormData] = useState({
         phoneNumber: "",
         otp: "",
@@ -54,10 +55,14 @@ export default function ForgotPassword() {
 
         setIsLoading(true);
         try {
-            await verifyPasswordReset({
+            const response = await verifyPasswordReset({
                 phone_number: formData.phoneNumber,
                 otp: formData.otp.trim(),
             });
+            if (!response.reset_token) {
+                throw new Error("Verification did not return a reset token");
+            }
+            setResetToken(response.reset_token);
             showSuccess("Code verified successfully");
             setStep("newPassword");
         } catch (err: any) {
@@ -89,6 +94,7 @@ export default function ForgotPassword() {
         try {
             await updatePassword({
                 phone_number: formData.phoneNumber,
+                reset_token: resetToken,
                 new_password: formData.newPassword,
             });
             showSuccess("Password updated successfully!");

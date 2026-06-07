@@ -17,15 +17,15 @@ export async function runWebSocketDiagnostics(
     // Test 1: Check environment variables
     const apiUrl = import.meta.env.VITE_API_URL;
     const wsUrl = import.meta.env.VITE_WS_URL;
-    const apiKey = import.meta.env.VITE_API_KEY;
+    const token = localStorage.getItem("auth_token");
 
     results.push({
         test: "Environment Variables",
-        status: apiUrl && apiKey ? "pass" : "warn",
+        status: apiUrl ? "pass" : "warn",
         message: `API URL: ${apiUrl || "not set"}, WS URL: ${
             wsUrl || "not set"
-        }, API Key: ${apiKey ? "set" : "not set"}`,
-        details: { apiUrl, wsUrl, hasApiKey: !!apiKey },
+        }, Auth token: ${token ? "set" : "not set"}`,
+        details: { apiUrl, wsUrl, hasAuthToken: !!token },
     });
 
     // Test 2: Check API connectivity
@@ -34,7 +34,6 @@ export async function runWebSocketDiagnostics(
             `${apiUrl || "https://api.phun.party"}/health`,
             {
                 headers: {
-                    "X-API-Key": apiKey || "",
                     Accept: "application/json",
                 },
             }
@@ -68,7 +67,7 @@ export async function runWebSocketDiagnostics(
             }/game-logic/status/${sessionCode}`,
             {
                 headers: {
-                    "X-API-Key": apiKey || "",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
                     Accept: "application/json",
                 },
             }
@@ -103,7 +102,9 @@ export async function runWebSocketDiagnostics(
     }
 
     // Test 4: WebSocket URL validation
-    const wsFullUrl = `wss://api.phun.party/ws/session/${sessionCode}?client_type=web`;
+    const wsFullUrl = `wss://api.phun.party/ws/session/${sessionCode}?client_type=web${
+        token ? `&token=${encodeURIComponent(token)}` : ""
+    }`;
     results.push({
         test: "WebSocket URL",
         status: "pass",

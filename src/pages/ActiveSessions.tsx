@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, Navigate } from "react-router-dom";
 import Card from "@/components/Card";
 import QR from "@/components/QR";
@@ -17,41 +17,83 @@ export default function ActiveSessions() {
   const loc = useLocation();
   const nav = useNavigate();
   const params = new URLSearchParams(loc.search);
+  const focusedSessionCode = params.get("focus");
   const [sessions, setSessions] = useState<GameResponse[]>([]);
   const [status, setStatus] = useState<GameStatusResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const focus = params.get("focus") || sessions[0]?.code;
+  const focus = focusedSessionCode || sessions[0]?.code;
 
-  const loadSessions = useCallback(async () => {
-    try {
-      setLoading(true);
-      const list = await getOwnedUserSessions();
-      setSessions(list);
-      if (!params.get("focus") && list[0]) {
-        nav(`/sessions?focus=${list[0].code}`, { replace: true });
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    let cancelled = false;
+
+    const loadSessions = async () => {
+      setError(null);
+
+      try {
+        setLoading(true);
+        const list = await getOwnedUserSessions();
+
+        if (cancelled) return;
+
+        setSessions(list);
+        if (!focusedSessionCode && list[0]) {
+          nav(`/sessions?focus=${list[0].code}`, { replace: true });
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.message || "Failed to load sessions");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-      if (focus) {
-        const stat = await getSessionStatus(focus);
-        setStatus(stat);
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to load sessions");
-    } finally {
-      setLoading(false);
+    };
+
+    void loadSessions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id, focusedSessionCode, nav]);
+
+  useEffect(() => {
+    if (!focus) {
+      setStatus(null);
+      return;
     }
-  }, [nav, loc.search]);
+
+    let cancelled = false;
+
+    const loadFocusedStatus = async () => {
+      try {
+        const stat = await getSessionStatus(focus);
+        if (!cancelled) {
+          setStatus(stat);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.message || "Failed to load session status");
+        }
+      }
+    };
+
+    void loadFocusedStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [focus]);
 
   // Use real-time updates for the focused session
   const { game_status: realTimeStatus, isConnected } = useGameUpdates({
     sessionCode: focus || "",
     pollInterval: 3000,
-    enableWebSocket: true,
+    enableWebSocket: Boolean(user && focus),
   });
-
-  useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
 
   // Merge real-time status with local status if available
   const currentStatus = realTimeStatus || status;

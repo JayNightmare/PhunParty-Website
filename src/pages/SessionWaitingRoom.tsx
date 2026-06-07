@@ -6,6 +6,7 @@ import { LoadingSpinner } from "@/components/Loading";
 import { LoadingState, LoadingButton } from "@/components/Loading";
 import ConnectionIndicator from "@/components/ConnectionIndicator";
 import useGameUpdates from "@/hooks/useGameUpdates";
+import { getPlayerKey } from "@/hooks/useGameWebSocket";
 import WebSocketStatus from "@/components/WebSocketStatus";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -348,10 +349,10 @@ export default function SessionWaitingRoom() {
               {/* Show actual connected players */}
               {connectedPlayers.map((p) => (
                 <div
-                  key={p.player_id}
+                  key={getPlayerKey(p)}
                   className="px-4 py-2 bg-ink-800 rounded-xl flex justify-between items-center gap-3"
                 >
-                  <span>{p.player_name || p.player_id}</span>
+                  <span>{p.player_name || getPlayerKey(p)}</span>
                   <div className="flex flex-wrap justify-end gap-2 text-xs">
                     {p.is_kicked ? (
                       <span className="rounded-full bg-red-900/40 px-2 py-1 text-red-300">

@@ -1,7 +1,7 @@
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { useCallback, useState, useEffect, useRef } from "react";
 import { Question, MCQOption } from "@/types";
-import { Player } from "@/hooks/useGameWebSocket";
+import { Player, getPlayerKey } from "@/hooks/useGameWebSocket";
 
 import Card from "@/components/Card";
 import {
@@ -25,6 +25,7 @@ import WebSocketStatus from "@/components/WebSocketStatus";
 import WebSocketDiagnostics from "@/components/WebSocketDiagnostics";
 
 const COUNTDOWN_DURATION_MS = 3000;
+const MAX_COUNTDOWN_SECONDS = COUNTDOWN_DURATION_MS / 1000;
 const QUESTION_TIMER_MS = 30000;
 
 export default function ActiveQuiz() {
@@ -44,6 +45,9 @@ export default function ActiveQuiz() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const countdownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownCompleteSentRef = useRef(false);
+  const sendMessageRef = useRef<((message: any) => void) | undefined>(undefined);
   const introCompleteSentRef = useRef(false);
   const playedIntroRef = useRef<string | null>(null);
   const hasNavigatedToStats = useRef(false);
@@ -95,6 +99,10 @@ export default function ActiveQuiz() {
     | string
     | null
     | undefined;
+
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  }, [sendMessage]);
   const hasProtocolState = Boolean(serverPhase);
   const questionIsVisible = hasProtocolState
     ? serverPhase === "question"
@@ -237,36 +245,76 @@ export default function ActiveQuiz() {
   useEffect(() => {
     if (serverPhase !== "countdown" || !serverCountdown?.questionStartAt) {
       setCountdown(null);
+      countdownCompleteSentRef.current = false;
       if (countdownRef.current) {
         clearInterval(countdownRef.current);
         countdownRef.current = null;
       }
+      if (countdownRecoveryRef.current) {
+        clearTimeout(countdownRecoveryRef.current);
+        countdownRecoveryRef.current = null;
+      }
       return;
     }
 
+    countdownCompleteSentRef.current = false;
+
+    const sendCountdownComplete = () => {
+      if (countdownCompleteSentRef.current) return;
+      countdownCompleteSentRef.current = true;
+      sendMessageRef.current?.({
+        type: "countdown_complete",
+        data: {
+          question_start_at: serverCountdown.questionStartAt,
+        },
+      });
+    };
+
     const updateCountdown = () => {
+      const questionStartAtMs = Date.parse(serverCountdown.questionStartAt);
       const remainingMs = Math.max(
         0,
-        Date.parse(serverCountdown.questionStartAt) -
-          (Date.now() + serverOffsetMs),
+        Number.isNaN(questionStartAtMs)
+          ? serverCountdown.durationMs ?? COUNTDOWN_DURATION_MS
+          : questionStartAtMs - (Date.now() + serverOffsetMs),
       );
       const displayNumber =
         remainingMs > 0
-          ? Math.max(1, Math.min(3, Math.ceil(remainingMs / 1000)))
+          ? Math.max(
+              1,
+              Math.min(MAX_COUNTDOWN_SECONDS, Math.ceil(remainingMs / 1000)),
+            )
           : 0;
       setCountdown(displayNumber);
+
+      if (remainingMs <= 0) {
+        sendCountdownComplete();
+      }
     };
 
     updateCountdown();
     countdownRef.current = setInterval(updateCountdown, 200);
+    countdownRecoveryRef.current = setTimeout(
+      sendCountdownComplete,
+      (serverCountdown.durationMs ?? COUNTDOWN_DURATION_MS) + 2000,
+    );
 
     return () => {
       if (countdownRef.current) {
         clearInterval(countdownRef.current);
         countdownRef.current = null;
       }
+      if (countdownRecoveryRef.current) {
+        clearTimeout(countdownRecoveryRef.current);
+        countdownRecoveryRef.current = null;
+      }
     };
-  }, [serverPhase, serverCountdown?.questionStartAt, serverOffsetMs]);
+  }, [
+    serverPhase,
+    serverCountdown?.durationMs,
+    serverCountdown?.questionStartAt,
+    serverOffsetMs,
+  ]);
 
   // Process game status updates
   useEffect(() => {
@@ -466,7 +514,8 @@ export default function ActiveQuiz() {
       if (Array.isArray(game_status.players)) {
         game_status.players.forEach((player: any) => {
           playerList.push({
-            player_id: player.player_id || player.id,
+            player_id: player.player_id || player.id || player.roster_player_id,
+            roster_player_id: player.roster_player_id,
             player_name: player.player_name || player.name,
             player_photo: player.player_photo || player.photo,
             connected_at: player.connected_at || null,
@@ -478,7 +527,8 @@ export default function ActiveQuiz() {
         if (playersObj.list && Array.isArray(playersObj.list)) {
           playersObj.list.forEach((player: any) => {
             playerList.push({
-              player_id: player.player_id || player.id,
+              player_id: player.player_id || player.id || player.roster_player_id,
+              roster_player_id: player.roster_player_id,
               player_name: player.player_name || player.name,
               player_photo: player.player_photo || player.photo,
               connected_at: player.connected_at || null,
@@ -632,7 +682,7 @@ export default function ActiveQuiz() {
         ...(((wsGameState as any)?.removedPlayers as Player[] | undefined) ||
           []),
         ...rawDisplayPlayers.filter((player) => player.is_kicked),
-      ].map((player) => [player.player_id, player]),
+      ].map((player) => [getPlayerKey(player), player]),
     ).values(),
   );
   const fairPlay = (wsGameState as any)?.fairPlay;
@@ -675,17 +725,20 @@ export default function ActiveQuiz() {
             type="button"
             onClick={() => {
               if (skipIntroSent) return;
+              if (!sendMessage || !isConnected) {
+                showError("WebSocket is still connecting. Try again in a moment.");
+                return;
+              }
+
               setSkipIntroSent(true);
               introCompleteSentRef.current = true;
               audioRef.current?.pause();
-              if (sendMessage && isConnected) {
-                sendMessage({
-                  type: "skip_intro",
-                  data: {
-                    duration_ms: COUNTDOWN_DURATION_MS,
-                  },
-                });
-              }
+              sendMessage({
+                type: "skip_intro",
+                data: {
+                  duration_ms: COUNTDOWN_DURATION_MS,
+                },
+              });
             }}
             disabled={skipIntroSent}
             className="px-6 py-3 bg-tea-500 text-ink-900 rounded-xl font-semibold hover:bg-tea-400 transition"
@@ -855,7 +908,7 @@ export default function ActiveQuiz() {
                       : maxFairPlayStrikes;
                   return (
                     <div
-                      key={p.player_id}
+                      key={getPlayerKey(p)}
                       className={`flex items-center justify-between px-3 py-2 rounded-xl transition-colors ${
                         hasAnswered
                           ? "bg-green-900/30 border border-green-500/30"
@@ -919,7 +972,7 @@ export default function ActiveQuiz() {
 
                       return (
                         <div
-                          key={player.player_id}
+                          key={getPlayerKey(player)}
                           className="flex items-center justify-between rounded-xl bg-red-900/20 border border-red-500/20 px-3 py-2"
                         >
                           <span className="font-medium truncate pr-3">
