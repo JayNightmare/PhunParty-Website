@@ -8,7 +8,7 @@ Cozy indie trivia game. React + Vite + Tailwind frontend, Python backend API (`a
 ## Quick Start
 
 1. `npm i`
-2. Copy `.env.example` to `.env.local` and set your API key
+2. Copy `.env.example` to `.env.local` and set your API/WS URLs
 3. `npm run dev` (automatically handles CORS via development proxy)
 4. Open http://localhost:5173
 
@@ -28,7 +28,7 @@ If you encounter CORS errors during login:
 ## Environment Variables
 
 - `VITE_API_URL`: Backend API URL (defaults to `https://api.phun.party`)
-- `VITE_API_KEY`: Required API key for backend authentication
+- `VITE_WS_URL`: Backend WebSocket URL (defaults to `wss://api.phun.party`)
 
 ## Build & Deploy
 
@@ -50,7 +50,7 @@ If you encounter CORS errors during login:
 - **Frontend:** React, Vite, TailwindCSS
 - **Backend:** Python FastAPI REST API (`api.phun.party`)
 - **API Client:** All game state, questions, sessions, and player actions are handled via backend endpoints in `src/lib/api.ts`
-- **Authentication:** API key required via `X-API-Key` header for all backend requests
+- **Authentication:** User JWT for normal API/WebSocket requests; private admin key only for server-side admin operations
 - **Pages:** NewSession, Join, ActiveQuiz, ActiveSessions, PostGameStats, Account
 
 ## Features
@@ -76,7 +76,7 @@ The backend provides the following main endpoints:
 - **Authentication:** `/auth/` - Player login
 - **Password Reset:** `/password-reset/` - OTP-based password reset via SMS
 
-All endpoints require authentication via `X-API-Key` header.
+User-specific endpoints require JWT authentication. Public registration/login/reset routes are rate-limited, and admin/maintenance endpoints require a server-only admin key.
 
 <br/>
 

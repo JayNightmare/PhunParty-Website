@@ -65,6 +65,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [error, setError] = useState<string | null>(null);
     const [showCORSHelper, setShowCORSHelper] = useState(false);
 
+    const clearStoredAuth = () => {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("auth_user");
+    };
+
     // Initialize auth state from localStorage
     useEffect(() => {
         const storedToken = localStorage.getItem("auth_token");
@@ -77,11 +84,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 setUser(userData);
             } catch (err) {
                 // Clear invalid data
-                localStorage.removeItem("auth_token");
-                localStorage.removeItem("auth_user");
+                clearStoredAuth();
             }
         }
         setIsLoading(false);
+    }, []);
+
+    useEffect(() => {
+        const handleAuthExpired = () => {
+            clearStoredAuth();
+            setError("Your session has expired. Please log in again.");
+        };
+
+        window.addEventListener("phunparty:auth-expired", handleAuthExpired);
+
+        return () => {
+            window.removeEventListener("phunparty:auth-expired", handleAuthExpired);
+        };
     }, []);
 
     const handleLogin = async (email: string, password: string) => {
@@ -165,10 +184,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     const handleLogout = () => {
-        setUser(null);
-        setToken(null);
-        localStorage.removeItem("auth_token");
-        localStorage.removeItem("auth_user");
+        clearStoredAuth();
         setError(null);
     };
 

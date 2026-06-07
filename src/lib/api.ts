@@ -3,7 +3,6 @@ export const API_BASE_URL = (
     ? "/api" // Use proxy during development
     : import.meta.env.VITE_API_URL || "https://api.phun.party"
 ).replace(/\/$/, "");
-const API_KEY = import.meta.env.VITE_API_KEY;
 
 // WebSocket URL utility
 export function getWebSocketUrl(
@@ -38,9 +37,16 @@ export function getWebSocketUrl(
 
   const url = new URL(`/ws/session/${sessionCode}`, baseUrl);
 
+  const token = localStorage.getItem("auth_token");
+  if (token) {
+    url.searchParams.set("token", token);
+  }
+
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.set(key, value);
+      if (key !== "player_id") {
+        url.searchParams.set(key, value);
+      }
     });
   }
 
@@ -53,6 +59,7 @@ export async function testApiConnection(): Promise<{
   details: any;
 }> {
   try {
+    const token = localStorage.getItem("auth_token");
     // Test multiple endpoints to see what works
     const testEndpoints = [
       "/", // Root endpoint
@@ -68,7 +75,7 @@ export async function testApiConnection(): Promise<{
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
           method: "GET",
           headers: {
-            "x-api-key": API_KEY || "",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
             Accept: "application/json",
           },
         });
@@ -97,8 +104,7 @@ export async function testApiConnection(): Promise<{
       status: "tested",
       details: {
         apiBaseUrl: API_BASE_URL,
-        apiKeySet: !!API_KEY,
-        apiKeyPreview: API_KEY ? "<redacted>" : null,
+        authTokenSet: !!token,
         endpointTests: results,
       },
     };
@@ -118,6 +124,15 @@ function buildUrl(path: string): string {
   return `${API_BASE_URL}${normalized}`;
 }
 
+function clearStoredAuth(reason: string): void {
+  localStorage.removeItem("auth_token");
+  localStorage.removeItem("auth_user");
+
+  window.dispatchEvent(
+    new CustomEvent("phunparty:auth-expired", { detail: { reason } }),
+  );
+}
+
 async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
@@ -126,8 +141,9 @@ async function apiFetch<T>(
   try {
     const headers = new Headers(init.headers ?? undefined);
 
-    if (API_KEY && !headers.has("x-api-key")) {
-      headers.set("x-api-key", API_KEY);
+    const token = localStorage.getItem("auth_token");
+    if (token && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`);
     }
 
     if (init.body && !headers.has("Content-Type")) {
@@ -148,6 +164,10 @@ async function apiFetch<T>(
         message = await response.text();
       } catch {
         message = undefined;
+      }
+
+      if (response.status === 401) {
+        clearStoredAuth(message || "Authentication expired");
       }
 
       throw new Error(
@@ -192,8 +212,9 @@ async function apiFetch<T>(
 }
 
 export interface ScoresResponseModel {
-  score_id: string;
-  player_id: string;
+  score_id?: string;
+  display_name: string;
+  player_photo_url?: string | null;
   score: number;
   result?: string | null;
   session_code: string;
@@ -291,10 +312,13 @@ export interface SubmitAnswerResponse {
 }
 
 type BackendScore = {
-  score_id: string;
+  score_id?: string;
   score: number;
   result?: string | null;
-  player_id: string;
+  display_name?: string | null;
+  player_display_name?: string | null;
+  player_name?: string | null;
+  player_photo_url?: string | null;
   session_code: string;
 };
 
@@ -377,7 +401,12 @@ type GameTypeResponse = {
 
 const mapScore = (raw: BackendScore): ScoresResponseModel => ({
   score_id: raw.score_id,
-  player_id: raw.player_id,
+  display_name:
+    raw.display_name ||
+    raw.player_display_name ||
+    raw.player_name ||
+    "Player",
+  player_photo_url: raw.player_photo_url ?? null,
   score: raw.score ?? 0,
   result: raw.result ?? null,
   session_code: raw.session_code,
@@ -567,11 +596,13 @@ export interface PasswordVerifyRequest {
 
 export interface PasswordUpdateRequest {
   phone_number: string;
+  reset_token: string;
   new_password: string;
 }
 
 export interface PasswordResetResponse {
   message: string;
+  reset_token?: string;
 }
 
 export interface PasswordUpdateResponse {
@@ -623,9 +654,6 @@ async function getPlayerWithToken(
   token: string,
 ): Promise<PlayerResponse> {
   const headers = new Headers();
-  if (API_KEY) {
-    headers.set("x-api-key", API_KEY);
-  }
   headers.set("Authorization", `Bearer ${token}`);
   headers.set("Accept", "application/json");
 
@@ -713,6 +741,7 @@ export async function createSession(
     game_code: data.game_code,
     host_name: data.host_name ?? "Host",
     number_of_questions: data.number_of_questions ?? 5,
+    ispublic: data.ispublic,
     difficulty: data.difficulty ?? "Easy",
     cheat_detection_enabled: data.cheat_detection_enabled ?? false,
     max_cheat_strikes: data.max_cheat_strikes ?? 3,
@@ -745,17 +774,13 @@ export async function getGameTypes(): Promise<GameTypeResponse[]> {
   return raw;
 }
 
-// Get user's created sessions from localStorage
+// Get user's created sessions from the authenticated account.
 export async function getOwnedUserSessions(): Promise<GameResponse[]> {
-  const stored = localStorage.getItem("auth_user");
-  if (!stored) return [];
+  const token = localStorage.getItem("auth_token");
+  if (!token) return [];
 
   try {
-    // Fetch owned session using user id and players/allOwnedSessions/{player_id}
-    const userId = JSON.parse(stored).id;
-    const raw = await apiFetch<BackendGameSession[]>(
-      `/players/allOwnedSessions/${encodeURIComponent(userId)}`,
-    );
+    const raw = await apiFetch<BackendGameSession[]>("/players/me/owned-sessions");
     return raw.map(mapSession);
   } catch (err) {
     console.error("Error loading owned user sessions:", err);

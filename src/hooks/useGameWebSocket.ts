@@ -37,6 +37,7 @@ export interface GameState {
 
 export interface Player {
   player_id: string;
+  roster_player_id?: string;
   player_name: string;
   player_photo?: string;
   connected_at?: string;
@@ -60,10 +61,19 @@ export interface FairPlaySettings {
 export interface BuzzerState {
   question_id?: string;
   current_buzzer_winner?: string | null;
+  current_buzzer_winner_roster_id?: string | null;
   frozen_players?: string[];
+  frozen_roster_player_ids?: string[];
   question_active?: boolean;
   server_time_ms?: number;
 }
+
+export const getPlayerKey = (
+  player: Pick<Player, "player_id" | "roster_player_id"> | null | undefined,
+): string => player?.roster_player_id || player?.player_id || "";
+
+const getEventPlayerKey = (data: any): string =>
+  data?.roster_player_id || data?.player_key || data?.player_id || data?.id || "";
 
 export interface UseGameWebSocketOptions extends Omit<
   UseWebSocketOptions,
@@ -283,10 +293,10 @@ export const useGameWebSocket = (
         if (!Array.isArray(incoming)) return existing;
 
         const existingMap = new Map<string, Player>();
-        existing.forEach((p) => existingMap.set(p.player_id, p));
+        existing.forEach((p) => existingMap.set(getPlayerKey(p), p));
 
         return incoming.map((incomingPlayer) => {
-          const existingPlayer = existingMap.get(incomingPlayer.player_id);
+          const existingPlayer = existingMap.get(getPlayerKey(incomingPlayer));
           if (!existingPlayer) return incomingPlayer;
 
           // Merge: prefer incoming data but keep existing name if incoming lacks it
@@ -340,11 +350,12 @@ export const useGameWebSocket = (
       ): Player[] => {
         const byId = new Map<string, Player>();
         (existing || []).forEach((player) =>
-          byId.set(player.player_id, player),
+          byId.set(getPlayerKey(player), player),
         );
         incoming.forEach((player) => {
-          const old = byId.get(player.player_id);
-          byId.set(player.player_id, {
+          const playerKey = getPlayerKey(player);
+          const old = byId.get(playerKey);
+          byId.set(playerKey, {
             ...old,
             ...player,
             is_kicked: true,
@@ -358,7 +369,9 @@ export const useGameWebSocket = (
         if (!Array.isArray(rawPlayers)) return [];
 
         return rawPlayers.map((pl: any) => ({
-          player_id: pl.player_id || pl.id,
+          player_id: pl.player_id || pl.id || pl.roster_player_id || pl.player_key,
+          roster_player_id:
+            pl.roster_player_id || pl.public_player_id || pl.player_key,
           player_name: pl.player_name || pl.name,
           player_photo: pl.player_photo,
           connected_at: pl.connected_at || pl.timestamp,
@@ -403,14 +416,21 @@ export const useGameWebSocket = (
         playerIdToFind: string,
       ): Player | undefined =>
         state.connectedPlayers.find(
-          (player) => player.player_id === playerIdToFind,
+          (player) =>
+            getPlayerKey(player) === playerIdToFind ||
+            player.player_id === playerIdToFind,
         ) ||
         state.removedPlayers?.find(
-          (player) => player.player_id === playerIdToFind,
+          (player) =>
+            getPlayerKey(player) === playerIdToFind ||
+            player.player_id === playerIdToFind,
         ) ||
-        ((state.game_state?.last_fair_play_event?.player_id === playerIdToFind
+        ((getEventPlayerKey(state.game_state?.last_fair_play_event) ===
+        playerIdToFind
           ? {
               player_id: playerIdToFind,
+              roster_player_id:
+                state.game_state.last_fair_play_event.roster_player_id,
               player_name:
                 state.game_state.last_fair_play_event.player_name ||
                 playerIdToFind,
@@ -443,10 +463,10 @@ export const useGameWebSocket = (
       ): Player[] => {
         if (!shouldPreserveRosterDuringFairPlay(state)) return incoming;
 
-        const incomingIds = new Set(incoming.map((player) => player.player_id));
+        const incomingIds = new Set(incoming.map((player) => getPlayerKey(player)));
         const preserved = existing
           .filter(
-            (player) => !player.is_kicked && !incomingIds.has(player.player_id),
+            (player) => !player.is_kicked && !incomingIds.has(getPlayerKey(player)),
           )
           .map((player) => ({
             ...player,
@@ -855,7 +875,11 @@ export const useGameWebSocket = (
         case "player_joined":
           if (message.data) {
             const player: Player = {
-              player_id: message.data.player_id || message.data.id,
+              player_id:
+                message.data.player_id ||
+                message.data.id ||
+                message.data.roster_player_id,
+              roster_player_id: message.data.roster_player_id,
               player_name: message.data.player_name,
               player_photo: message.data.player_photo,
               connected_at: message.data.timestamp,
@@ -880,7 +904,7 @@ export const useGameWebSocket = (
                 } as GameState);
               // Avoid duplicates by player_id
               const exists = base.connectedPlayers.some(
-                (p) => p.player_id === player.player_id,
+                (p) => getPlayerKey(p) === getPlayerKey(player),
               );
               if (import.meta.env.DEV) {
                 console.debug(
@@ -895,7 +919,7 @@ export const useGameWebSocket = (
                 ...base,
                 connectedPlayers: exists
                   ? base.connectedPlayers.map((existingPlayer) =>
-                      existingPlayer.player_id === player.player_id
+                      getPlayerKey(existingPlayer) === getPlayerKey(player)
                         ? {
                             ...existingPlayer,
                             ...player,
@@ -914,6 +938,7 @@ export const useGameWebSocket = (
         case "player_left":
           if (message.data) {
             let shouldNotifyPlayerLeft = true;
+            const departingPlayerKey = getEventPlayerKey(message.data);
             setGameState((prev) => {
               const base: GameState =
                 prev ||
@@ -931,7 +956,7 @@ export const useGameWebSocket = (
                 return {
                   ...base,
                   connectedPlayers: base.connectedPlayers.map((player) =>
-                    player.player_id === message.data.player_id
+                    getPlayerKey(player) === departingPlayerKey
                       ? {
                           ...player,
                           is_disconnected: true,
@@ -948,13 +973,13 @@ export const useGameWebSocket = (
               return {
                 ...base,
                 connectedPlayers: base.connectedPlayers.filter(
-                  (p) => p.player_id !== message.data.player_id,
+                  (p) => getPlayerKey(p) !== departingPlayerKey,
                 ),
               };
             });
 
             if (shouldNotifyPlayerLeft) {
-              onPlayerLeft?.(message.data.player_id);
+              onPlayerLeft?.(departingPlayerKey);
             }
           }
           break;
@@ -988,7 +1013,8 @@ export const useGameWebSocket = (
             );
             if (message.data?.players && Array.isArray(message.data.players)) {
               const incomingPlayers = message.data.players.map((pl: any) => ({
-                player_id: pl.player_id || pl.id,
+                player_id: pl.player_id || pl.id || pl.roster_player_id,
+                roster_player_id: pl.roster_player_id,
                 player_name: pl.player_name || pl.name,
                 player_photo: pl.player_photo,
                 answered_current: false,
@@ -1211,13 +1237,14 @@ export const useGameWebSocket = (
 
         case "player_answered":
           if (message.data) {
+            const answeredPlayerKey = getEventPlayerKey(message.data);
             // Update player as having answered current question
             setGameState((prev) =>
               prev
                 ? {
                     ...prev,
                     connectedPlayers: prev.connectedPlayers.map((p) =>
-                      p.player_id === message.data.player_id
+                      getPlayerKey(p) === answeredPlayerKey
                         ? {
                             ...p,
                             answered_current: true,
@@ -1238,7 +1265,7 @@ export const useGameWebSocket = (
             );
 
             onPlayerAnswered?.(
-              message.data.player_id,
+              answeredPlayerKey,
               message.data.player_name,
             );
           }
@@ -1246,7 +1273,10 @@ export const useGameWebSocket = (
 
         case "buzzer_winner":
           if (message.data) {
-            onBuzzerWinner?.(message.data.player_id, message.data.player_name);
+            onBuzzerWinner?.(
+              getEventPlayerKey(message.data),
+              message.data.player_name,
+            );
           }
           break;
 
@@ -1268,8 +1298,15 @@ export const useGameWebSocket = (
               question_id: message.data?.question_id,
               current_buzzer_winner:
                 message.data?.current_buzzer_winner ?? null,
+              current_buzzer_winner_roster_id:
+                message.data?.current_buzzer_winner_roster_id ?? null,
               frozen_players: Array.isArray(message.data?.frozen_players)
                 ? message.data.frozen_players
+                : [],
+              frozen_roster_player_ids: Array.isArray(
+                message.data?.frozen_roster_player_ids,
+              )
+                ? message.data.frozen_roster_player_ids
                 : [],
               question_active: Boolean(message.data?.question_active),
               server_time_ms: message.data?.server_time_ms,
@@ -1291,13 +1328,16 @@ export const useGameWebSocket = (
 
         case "correct_answer":
           if (message.data) {
-            onCorrectAnswer?.(message.data.player_id, message.data.answer);
+            onCorrectAnswer?.(getEventPlayerKey(message.data), message.data.answer);
           }
           break;
 
         case "incorrect_answer":
           if (message.data) {
-            onIncorrectAnswer?.(message.data.player_id, message.data.answer);
+            onIncorrectAnswer?.(
+              getEventPlayerKey(message.data),
+              message.data.answer,
+            );
           }
           break;
 
@@ -1331,7 +1371,8 @@ export const useGameWebSocket = (
 
         case "fair_play_status_update":
         case "player_flagged":
-          if (message.data?.player_id) {
+          if (getEventPlayerKey(message.data)) {
+            const flaggedPlayerKey = getEventPlayerKey(message.data);
             setGameState((prev) => {
               const base: GameState =
                 prev ||
@@ -1350,19 +1391,22 @@ export const useGameWebSocket = (
               const isKicked = Boolean(message.data.is_kicked);
               const knownPlayer: Player = findKnownPlayer(
                 base,
-                message.data.player_id,
+                flaggedPlayerKey,
               ) || {
-                player_id: message.data.player_id,
+                player_id: message.data.player_id || flaggedPlayerKey,
+                roster_player_id: message.data.roster_player_id,
                 player_name:
-                  message.data.player_name || message.data.player_id,
+                  message.data.player_name || flaggedPlayerKey,
               };
               const updatedPlayer: Player = {
                 ...knownPlayer,
-                player_id: message.data.player_id,
+                player_id: message.data.player_id || flaggedPlayerKey,
+                roster_player_id:
+                  message.data.roster_player_id || knownPlayer.roster_player_id,
                 player_name:
                   message.data.player_name ||
                   knownPlayer.player_name ||
-                  message.data.player_id,
+                  flaggedPlayerKey,
                 strike_count: strikeCount ?? knownPlayer.strike_count,
                 max_strikes: maxStrikes ?? knownPlayer.max_strikes,
                 is_frozen:
@@ -1382,18 +1426,18 @@ export const useGameWebSocket = (
                   knownPlayer.fair_play_reason,
               };
               const playerAlreadyVisible = base.connectedPlayers.some(
-                (player) => player.player_id === message.data.player_id,
+                (player) => getPlayerKey(player) === flaggedPlayerKey,
               );
 
               return {
                 ...base,
                 connectedPlayers: isKicked
                   ? base.connectedPlayers.filter(
-                      (player) => player.player_id !== message.data.player_id,
+                      (player) => getPlayerKey(player) !== flaggedPlayerKey,
                     )
                   : playerAlreadyVisible
                     ? base.connectedPlayers.map((player) =>
-                        player.player_id === message.data.player_id
+                        getPlayerKey(player) === flaggedPlayerKey
                           ? updatedPlayer
                           : player,
                       )
@@ -1411,7 +1455,8 @@ export const useGameWebSocket = (
           break;
 
         case "player_kicked":
-          if (message.data?.player_id) {
+          if (getEventPlayerKey(message.data)) {
+            const kickedPlayerKey = getEventPlayerKey(message.data);
             setGameState((prev) => {
               const base: GameState =
                 prev ||
@@ -1426,17 +1471,18 @@ export const useGameWebSocket = (
 
               const kickedSelf = message.data.player_id === playerId;
               const kickedPlayer =
-                findKnownPlayer(base, message.data.player_id) ||
+                findKnownPlayer(base, kickedPlayerKey) ||
                 ({
-                  player_id: message.data.player_id,
+                  player_id: message.data.player_id || kickedPlayerKey,
+                  roster_player_id: message.data.roster_player_id,
                   player_name:
-                    message.data.player_name || message.data.player_id,
+                    message.data.player_name || kickedPlayerKey,
                 } as Player);
 
               return {
                 ...base,
                 connectedPlayers: base.connectedPlayers.filter(
-                  (player) => player.player_id !== message.data.player_id,
+                  (player) => getPlayerKey(player) !== kickedPlayerKey,
                 ),
                 removedPlayers: mergeRemovedPlayers(base.removedPlayers, [
                   {
