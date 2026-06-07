@@ -5,6 +5,7 @@ import useGameWebSocket, {
   getPlayerKey,
 } from "@/hooks/useGameWebSocket";
 import { getSessionStatus, GameStatusResponse } from "@/lib/api";
+import { R } from "node_modules/vitest/dist/chunks/traces.d.D2T_R8rx";
 
 const buildRosterCacheKey = (sessionCode: string) =>
   `phunparty:roster:${sessionCode}`;
@@ -105,11 +106,15 @@ const useGameUpdates = ({
     readRosterCache(sessionCode),
   );
 
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFetchRef = useRef<number>(0);
-  const rosterRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const rosterRefreshIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const lastManualRefreshRef = useRef<number>(0);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const fetchGameStatus = useCallback(async () => {
     if (!sessionCode) return;
@@ -134,8 +139,43 @@ const useGameUpdates = ({
   // WebSocket event handlers
   const handlePlayerJoined = useCallback(
     (player: Player) => {
-      // Don't manually update connectedPlayers here - it will be updated
-      // via the useEffect that watches game_state.connectedPlayers
+      setConnectedPlayers((prev) => {
+        const playerKey = getPlayerKey(player);
+        if (!playerKey) return prev;
+
+        const existingIndex = prev.findIndex(
+          (p) =>
+            getPlayerKey(p) === playerKey || p.player_id === player.player_id,
+        );
+
+        let next: Player[];
+
+        if (existingIndex >= 0) {
+          next = prev.map((p, index) =>
+            index === existingIndex
+              ? {
+                  ...p,
+                  ...player,
+                  player_name: player.player_name || p.player_name,
+                  connected_at: player.connected_at || p.connected_at,
+                  is_disconnected: false,
+                }
+              : p,
+          );
+        } else {
+          next = [
+            ...prev,
+            {
+              ...player,
+              is_disconnected: false,
+            },
+          ];
+        }
+
+        writeRosterCache(sessionCode, next);
+        return next;
+      });
+
       setLastUpdate({
         type: "player_joined",
         sessionCode,
@@ -149,7 +189,9 @@ const useGameUpdates = ({
   const handlePlayerLeft = useCallback(
     (playerId: string) => {
       setConnectedPlayers((prev) =>
-        prev.filter((p) => getPlayerKey(p) !== playerId && p.player_id !== playerId),
+        prev.filter(
+          (p) => getPlayerKey(p) !== playerId && p.player_id !== playerId,
+        ),
       );
 
       setLastUpdate({
