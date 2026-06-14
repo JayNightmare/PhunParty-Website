@@ -458,6 +458,14 @@ export default function ActiveQuiz() {
     localCountdownActiveRef.current = false;
     setLocalCountdownActive(false);
     countdownCompleteSentRef.current = false;
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    if (countdownRecoveryRef.current) {
+      clearTimeout(countdownRecoveryRef.current);
+      countdownRecoveryRef.current = null;
+    }
 
     const sendCountdownComplete = () => {
       if (countdownCompleteSentRef.current) return;
