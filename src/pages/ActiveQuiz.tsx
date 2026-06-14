@@ -89,6 +89,7 @@ export default function ActiveQuiz() {
   const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownCompleteSentRef = useRef(false);
   const countdownDisplayRef = useRef<number | null>(null);
+  const serverOffsetMsRef = useRef(0);
   const localCountdownActiveRef = useRef(false);
   const sendMessageRef = useRef<((message: any) => void) | undefined>(undefined);
   const introCompleteSentRef = useRef(false);
@@ -186,6 +187,11 @@ export default function ActiveQuiz() {
   useEffect(() => {
     sendMessageRef.current = sendMessage;
   }, [sendMessage]);
+
+  useEffect(() => {
+    serverOffsetMsRef.current = serverOffsetMs;
+  }, [serverOffsetMs]);
+
   const hasProtocolState = Boolean(serverPhase);
   const questionIsVisible = hasProtocolState
     ? serverPhase === "question" && !isBeatClock
@@ -502,7 +508,7 @@ export default function ActiveQuiz() {
         0,
         Number.isNaN(questionStartAtMs)
           ? serverCountdown.durationMs ?? COUNTDOWN_DURATION_MS
-          : questionStartAtMs - (Date.now() + serverOffsetMs),
+          : questionStartAtMs - (Date.now() + serverOffsetMsRef.current),
       );
       const displayNumber =
         remainingMs > 0
@@ -539,8 +545,6 @@ export default function ActiveQuiz() {
     serverPhase,
     serverCountdown?.durationMs,
     serverCountdown?.questionStartAt,
-    serverOffsetMs,
-    localCountdownActive,
     resetCountdownDisplay,
     setCountdownDisplay,
   ]);
