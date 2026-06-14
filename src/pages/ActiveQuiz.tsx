@@ -88,6 +88,7 @@ export default function ActiveQuiz() {
   const countdownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownCompleteSentRef = useRef(false);
+  const countdownDisplayRef = useRef<number | null>(null);
   const localCountdownActiveRef = useRef(false);
   const sendMessageRef = useRef<((message: any) => void) | undefined>(undefined);
   const introCompleteSentRef = useRef(false);
@@ -190,6 +191,21 @@ export default function ActiveQuiz() {
     ? serverPhase === "question" && !isBeatClock
     : !!game_status?.isstarted;
 
+  const resetCountdownDisplay = useCallback(() => {
+    countdownDisplayRef.current = null;
+    setCountdown(null);
+  }, []);
+
+  const setCountdownDisplay = useCallback((nextValue: number) => {
+    setCountdown((current) => {
+      const previous = countdownDisplayRef.current ?? current;
+      const displayValue =
+        previous === null ? nextValue : Math.min(previous, nextValue);
+      countdownDisplayRef.current = displayValue;
+      return displayValue;
+    });
+  }, []);
+
   const startLocalCountdownFallback = useCallback((reason: string) => {
     const questionStartAtMs = Date.now() + COUNTDOWN_DURATION_MS;
 
@@ -198,6 +214,7 @@ export default function ActiveQuiz() {
     setLocalCountdownActive(true);
     setLocalCountdownFinished(false);
     countdownCompleteSentRef.current = false;
+    countdownDisplayRef.current = null;
 
     if (countdownRef.current) {
       clearInterval(countdownRef.current);
@@ -236,14 +253,14 @@ export default function ActiveQuiz() {
               Math.min(MAX_COUNTDOWN_SECONDS, Math.ceil(remainingMs / 1000)),
             )
           : 0;
-      setCountdown(displayNumber);
+      setCountdownDisplay(displayNumber);
 
       if (remainingMs <= 0) {
         if (countdownRef.current) {
           clearInterval(countdownRef.current);
           countdownRef.current = null;
         }
-        setCountdown(null);
+        resetCountdownDisplay();
         setLocalCountdownFinished(true);
         sendCountdownComplete();
       }
@@ -255,7 +272,7 @@ export default function ActiveQuiz() {
       sendCountdownComplete,
       COUNTDOWN_DURATION_MS + 1000,
     );
-  }, []);
+  }, [resetCountdownDisplay, setCountdownDisplay]);
 
   useEffect(() => {
     if (beatClockTimerEndsAt || serverPhase === "ended") {
@@ -442,7 +459,7 @@ export default function ActiveQuiz() {
       if (localCountdownActiveRef.current) {
         return;
       }
-      setCountdown(null);
+      resetCountdownDisplay();
       countdownCompleteSentRef.current = false;
       if (countdownRef.current) {
         clearInterval(countdownRef.current);
@@ -458,6 +475,7 @@ export default function ActiveQuiz() {
     localCountdownActiveRef.current = false;
     setLocalCountdownActive(false);
     countdownCompleteSentRef.current = false;
+    countdownDisplayRef.current = null;
     if (countdownRef.current) {
       clearInterval(countdownRef.current);
       countdownRef.current = null;
@@ -493,7 +511,7 @@ export default function ActiveQuiz() {
               Math.min(MAX_COUNTDOWN_SECONDS, Math.ceil(remainingMs / 1000)),
             )
           : 0;
-      setCountdown(displayNumber);
+      setCountdownDisplay(displayNumber);
 
       if (remainingMs <= 0) {
         sendCountdownComplete();
@@ -523,6 +541,8 @@ export default function ActiveQuiz() {
     serverCountdown?.questionStartAt,
     serverOffsetMs,
     localCountdownActive,
+    resetCountdownDisplay,
+    setCountdownDisplay,
   ]);
 
   // Process game status updates
