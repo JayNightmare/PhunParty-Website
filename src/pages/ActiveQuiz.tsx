@@ -302,11 +302,6 @@ export default function ActiveQuiz() {
   useEffect(() => {
     if (!serverPhase) return;
 
-    if (isBeatClock) {
-      setIntroMode(false);
-      return;
-    }
-
     if (
       serverPhase === "intro_audio" ||
       serverPhase === "countdown_pending" ||
