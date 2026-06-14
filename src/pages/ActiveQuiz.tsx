@@ -27,6 +27,39 @@ import WebSocketDiagnostics from "@/components/WebSocketDiagnostics";
 const COUNTDOWN_DURATION_MS = 3000;
 const MAX_COUNTDOWN_SECONDS = COUNTDOWN_DURATION_MS / 1000;
 const QUESTION_TIMER_MS = 30000;
+const BEAT_CLOCK_WARNING_MS = 10000;
+
+const formatBeatClockTime = (remainingMs: number) => {
+  const safeSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+};
+
+const playBeatClockWarningBuzz = () => {
+  try {
+    const AudioContextCtor =
+      window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextCtor) return;
+
+    const audioContext = new AudioContextCtor();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    oscillator.type = "sawtooth";
+    oscillator.frequency.value = 140;
+    gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.18, audioContext.currentTime + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.65);
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.7);
+  } catch (err) {
+    console.warn("Beat the Clock warning audio could not play.", err);
+  }
+};
 
 export default function ActiveQuiz() {
   const { sessionId } = useParams();
@@ -50,10 +83,12 @@ export default function ActiveQuiz() {
   const sendMessageRef = useRef<((message: any) => void) | undefined>(undefined);
   const introCompleteSentRef = useRef(false);
   const playedIntroRef = useRef<string | null>(null);
+  const beatClockAlertPlayedRef = useRef(false);
   const hasNavigatedToStats = useRef(false);
   const [skipIntroSent, setSkipIntroSent] = useState(false);
   // Timer duration based on difficulty – must be declared before any conditional returns
   const [timerMs, setTimerMs] = useState<number | undefined>(undefined);
+  const [beatClockRemainingMs, setBeatClockRemainingMs] = useState(0);
 
   // Use the new real-time game updates hook
   const {
@@ -113,6 +148,43 @@ export default function ActiveQuiz() {
   const questionIsVisible = hasProtocolState
     ? serverPhase === "question" && !isBeatClock
     : !!game_status?.isstarted;
+
+  useEffect(() => {
+    if (!isBeatClock || !beatClockEndsAt) {
+      setBeatClockRemainingMs(0);
+      beatClockAlertPlayedRef.current = false;
+      return;
+    }
+
+    const updateRemaining = () => {
+      const endsAtMs = Date.parse(beatClockEndsAt);
+      const remainingMs = Number.isNaN(endsAtMs)
+        ? 0
+        : Math.max(0, endsAtMs - (Date.now() + serverOffsetMs));
+      setBeatClockRemainingMs(remainingMs);
+    };
+
+    updateRemaining();
+    const interval = window.setInterval(updateRemaining, 200);
+    return () => window.clearInterval(interval);
+  }, [beatClockEndsAt, isBeatClock, serverOffsetMs]);
+
+  useEffect(() => {
+    if (!isBeatClock || !beatClockEndsAt) return;
+
+    if (
+      beatClockRemainingMs > 0 &&
+      beatClockRemainingMs <= BEAT_CLOCK_WARNING_MS &&
+      !beatClockAlertPlayedRef.current
+    ) {
+      beatClockAlertPlayedRef.current = true;
+      playBeatClockWarningBuzz();
+    }
+
+    if (beatClockRemainingMs > BEAT_CLOCK_WARNING_MS) {
+      beatClockAlertPlayedRef.current = false;
+    }
+  }, [beatClockEndsAt, beatClockRemainingMs, isBeatClock]);
 
   // Touch gestures for swipe navigation and pull-to-refresh
   const { attachGestures, isRefreshing: gestureRefreshing } = useTouchGestures({
@@ -774,6 +846,42 @@ export default function ActiveQuiz() {
             {skipIntroSent ? "Skipping..." : "Skip"}
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (isBeatClock && game_state !== "ended" && serverPhase !== "ended") {
+    const isWarning =
+      beatClockRemainingMs > 0 && beatClockRemainingMs <= BEAT_CLOCK_WARNING_MS;
+
+    return (
+      <div className="min-h-screen bg-ink-900 text-white flex items-center justify-center px-6">
+        <main className="w-full max-w-5xl text-center">
+          <div className="mb-8 text-sm uppercase tracking-[0.35em] text-tea-400">
+            Beat the Clock
+          </div>
+          <div
+            className={`font-mono font-bold leading-none transition-colors ${
+              isWarning ? "text-red-500 animate-pulse" : "text-white"
+            }`}
+            style={{ fontSize: "clamp(6rem, 22vw, 18rem)" }}
+            aria-live="polite"
+          >
+            {beatClockEndsAt
+              ? formatBeatClockTime(beatClockRemainingMs)
+              : "--:--"}
+          </div>
+          {isWarning && (
+            <div className="mt-8 text-3xl font-semibold text-red-500 animate-pulse">
+              Time is almost up
+            </div>
+          )}
+          {!beatClockEndsAt && (
+            <div className="mt-8 text-2xl text-stone-300 animate-pulse">
+              Starting timer...
+            </div>
+          )}
+        </main>
       </div>
     );
   }
