@@ -256,17 +256,8 @@ export default function ActiveQuiz() {
       questionStartAt?: string;
       reason: string;
     }) => {
-      const safeDurationMs = durationMs || COUNTDOWN_DURATION_MS;
-      const parsedQuestionStartAtMs = Date.parse(String(questionStartAt || ""));
-      const parsedStartAtMs = Date.parse(String(startAt || ""));
-      const questionStartAtMs = Number.isNaN(parsedQuestionStartAtMs)
-        ? Date.now() + safeDurationMs
-        : parsedQuestionStartAtMs;
-      const countdownStartAtMs = Number.isNaN(parsedStartAtMs)
-        ? questionStartAtMs - safeDurationMs
-        : parsedStartAtMs;
       const questionStartAtIso =
-        questionStartAt || new Date(questionStartAtMs).toISOString();
+        questionStartAt || new Date(Date.now() + COUNTDOWN_DURATION_MS).toISOString();
 
       setIntroMode(true);
       localCountdownActiveRef.current = true;
@@ -302,27 +293,14 @@ export default function ActiveQuiz() {
         });
       };
 
-      const delayUntil = (targetMs: number) =>
-        Math.max(0, targetMs - (Date.now() + serverOffsetMsRef.current));
-
       setCountdownDisplay(MAX_COUNTDOWN_SECONDS);
       countdownStepTimersRef.current = [
-        window.setTimeout(
-          () => setCountdownDisplay(MAX_COUNTDOWN_SECONDS),
-          delayUntil(countdownStartAtMs),
-        ),
-        window.setTimeout(
-          () => setCountdownDisplay(2),
-          delayUntil(countdownStartAtMs + 1000),
-        ),
-        window.setTimeout(
-          () => setCountdownDisplay(1),
-          delayUntil(countdownStartAtMs + 2000),
-        ),
+        window.setTimeout(() => setCountdownDisplay(2), 1000),
+        window.setTimeout(() => setCountdownDisplay(1), 2000),
         window.setTimeout(() => {
           setCountdownDisplay(0);
           setLocalCountdownFinished(true);
-        }, delayUntil(questionStartAtMs)),
+        }, 3000),
         window.setTimeout(() => {
           sendCountdownComplete();
           countInLockedRef.current = false;
@@ -330,11 +308,11 @@ export default function ActiveQuiz() {
           localCountdownActiveRef.current = false;
           setLocalCountdownActive(false);
           resetCountdownDisplay();
-        }, delayUntil(questionStartAtMs + 450)),
+        }, 3400),
       ];
       countdownRecoveryRef.current = setTimeout(
         sendCountdownComplete,
-        delayUntil(questionStartAtMs + 1500),
+        5000,
       );
     },
     [clearCountdownStepTimers, resetCountdownDisplay, setCountdownDisplay],
