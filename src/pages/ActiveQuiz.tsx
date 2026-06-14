@@ -131,9 +131,7 @@ export default function ActiveQuiz() {
   const hasActiveBeatClockState = Boolean(
     beatClockState?.active ||
       beatClockState?.ends_at ||
-      beatClockState?.endsAt ||
-      beatClockState?.started_at ||
-      beatClockState?.startedAt,
+      beatClockState?.endsAt,
   );
   const hasBeatClockQuestionPool =
     Number(
@@ -175,9 +173,7 @@ export default function ActiveQuiz() {
     wsGameMetadata?.end_at ??
     wsGameMetadata?.expires_at ??
     null;
-  const beatClockTimerEndsAt = isBeatClock
-    ? beatClockEndsAt || questionEndsAt
-    : null;
+  const beatClockTimerEndsAt = isBeatClock ? beatClockEndsAt : null;
   const introEventId = (wsGameState as any)?.introEventId as
     | string
     | null
@@ -836,9 +832,15 @@ export default function ActiveQuiz() {
               (p: any) => p.answered_current || p.answeredCurrent,
             ).length,
         );
+  const shouldShowIntroOverlay =
+    introMode ||
+    (isBeatClock &&
+      !beatClockTimerEndsAt &&
+      game_state !== "ended" &&
+      serverPhase !== "ended");
 
   // Intro screen overlay
-  if (introMode) {
+  if (shouldShowIntroOverlay) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black text-white">
         <div className="text-center space-y-6">
