@@ -7,18 +7,54 @@ import { useAuth } from "@/contexts/AuthContext";
 import { LoadingButton, LoadingState } from "@/components/Loading";
 import { useToast } from "@/contexts/ToastContext";
 
-const isBeatTheClockGameType = (value: string) => {
-  const normalized = value.trim().toLowerCase().replace(/[_\s]+/g, "-");
-  return normalized.includes("beat-the-clock") || normalized.includes("beat-clock");
+const getGameTypeCandidates = (value: unknown): string[] => {
+  if (!value) return [];
+  if (typeof value === "string") return [value];
+  if (typeof value !== "object") return [String(value)];
+
+  const gameType = value as Record<string, unknown>;
+  return [
+    gameType.genre,
+    gameType.game_code,
+    gameType.gameCode,
+    gameType.game_type,
+    gameType.gameType,
+    gameType.name,
+    gameType.title,
+    gameType.display_name,
+    gameType.displayName,
+    gameType.rules,
+  ]
+    .filter((candidate): candidate is string => typeof candidate === "string")
+    .filter(Boolean);
 };
 
-const BEAT_CLOCK_QUESTION_POOL_SIZE = 300;
+const compactGameType = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+const isBeatTheClockGameType = (value: unknown) => {
+  return getGameTypeCandidates(value).some((candidate) => {
+    const compact = compactGameType(candidate);
+    return compact.includes("beattheclock") || compact.includes("beatclock");
+  });
+};
+
+const BEAT_CLOCK_QUESTION_POOL_SIZE = 1000;
 const BEAT_CLOCK_DURATION_OPTIONS = [30, 60, 90, 120, 180, 300];
 
 const formatGameType = (value: string) =>
   value
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const getGameTypeOptionValue = (gameType: unknown) => {
+  const candidates = getGameTypeCandidates(gameType);
+  return (
+    candidates.find((candidate) => isBeatTheClockGameType(candidate)) ||
+    candidates[0] ||
+    ""
+  );
+};
 
 export default function NewSession() {
   const { user, isLoading: authLoading } = useAuth();
@@ -62,7 +98,7 @@ export default function NewSession() {
           gameTypeStrings = gameTypes as string[];
         } else {
           gameTypeStrings = gameTypes
-            .map((gt) => gt?.genre || gt?.game_code || "")
+            .map(getGameTypeOptionValue)
             .filter(Boolean) as string[];
         }
 
@@ -121,11 +157,9 @@ export default function NewSession() {
       // use getGameTypes which returns available game definitions
       const gameTypes = await getGameTypes();
       const gameOfType = gameTypes.find((gt) => {
-        const genre = (gt.genre || "").toString();
-        const code = (gt.game_code || "").toString();
-        return (
-          genre.toLowerCase() === selectedGameType.toLowerCase() ||
-          code.toLowerCase() === selectedGameType.toLowerCase()
+        const selected = compactGameType(selectedGameType);
+        return getGameTypeCandidates(gt).some(
+          (candidate) => compactGameType(candidate) === selected,
         );
       });
 
@@ -135,16 +169,23 @@ export default function NewSession() {
         return;
       }
 
+      const sessionIsBeatClock =
+        isBeatClock || isBeatTheClockGameType(gameOfType);
+
       const session = await createSession({
         owner_player_id: user?.id || undefined,
         host_name: hostName.trim(),
-        number_of_questions: isBeatClock ? BEAT_CLOCK_QUESTION_POOL_SIZE : num,
+        number_of_questions: sessionIsBeatClock
+          ? BEAT_CLOCK_QUESTION_POOL_SIZE
+          : num,
         game_code: gameOfType.game_code, // Use actual game code
         ispublic: true,
-        difficulty: isBeatClock ? undefined : difficulty,
+        difficulty: sessionIsBeatClock ? undefined : difficulty,
         cheat_detection_enabled: fairPlayEnabled,
         max_cheat_strikes: maxFairPlayStrikes,
-        beat_clock_duration_seconds: isBeatClock ? beatClockDuration : undefined,
+        beat_clock_duration_seconds: sessionIsBeatClock
+          ? beatClockDuration
+          : undefined,
       });
       sessionStorage.setItem(
         `phunparty:fair-play:${session.code}`,
