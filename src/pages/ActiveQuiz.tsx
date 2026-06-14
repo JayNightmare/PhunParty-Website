@@ -142,11 +142,23 @@ export default function ActiveQuiz() {
       wsGameMetadata?.gameType,
       wsGameMetadata?.game_type,
       wsGameMetadata?.genre,
+      wsQuestion?.gameType,
+      wsQuestion?.game_type,
+      wsQuestion?.genre,
+      question?.genre,
       (game_status as any)?.game_type,
       (game_status as any)?.gameType,
       (game_status as any)?.genre,
       (game_status as any)?.game_code,
-    ) || hasActiveBeatClockState;
+    ) ||
+    hasActiveBeatClockState ||
+    (game_status?.total_questions === 300 &&
+      isBeatClockGameType(
+        wsQuestion?.game_type,
+        wsQuestion?.genre,
+        question?.genre,
+        (game_status as any)?.genre,
+      ));
   const beatClockEndsAt =
     beatClockState?.ends_at ?? beatClockState?.endsAt ?? null;
   const questionEndsAt =
@@ -161,6 +173,9 @@ export default function ActiveQuiz() {
     wsGameMetadata?.end_at ??
     wsGameMetadata?.expires_at ??
     null;
+  const beatClockTimerEndsAt = isBeatClock
+    ? beatClockEndsAt || questionEndsAt
+    : null;
   const introEventId = (wsGameState as any)?.introEventId as
     | string
     | null
@@ -175,14 +190,14 @@ export default function ActiveQuiz() {
     : !!game_status?.isstarted;
 
   useEffect(() => {
-    if (!isBeatClock || !beatClockEndsAt) {
+    if (!isBeatClock || !beatClockTimerEndsAt) {
       setBeatClockRemainingMs(0);
       beatClockAlertPlayedRef.current = false;
       return;
     }
 
     const updateRemaining = () => {
-      const endsAtMs = Date.parse(beatClockEndsAt);
+      const endsAtMs = Date.parse(beatClockTimerEndsAt);
       const remainingMs = Number.isNaN(endsAtMs)
         ? 0
         : Math.max(0, endsAtMs - (Date.now() + serverOffsetMs));
@@ -192,10 +207,10 @@ export default function ActiveQuiz() {
     updateRemaining();
     const interval = window.setInterval(updateRemaining, 200);
     return () => window.clearInterval(interval);
-  }, [beatClockEndsAt, isBeatClock, serverOffsetMs]);
+  }, [beatClockTimerEndsAt, isBeatClock, serverOffsetMs]);
 
   useEffect(() => {
-    if (!isBeatClock || !beatClockEndsAt) return;
+    if (!isBeatClock || !beatClockTimerEndsAt) return;
 
     if (
       beatClockRemainingMs > 0 &&
@@ -209,7 +224,7 @@ export default function ActiveQuiz() {
     if (beatClockRemainingMs > BEAT_CLOCK_WARNING_MS) {
       beatClockAlertPlayedRef.current = false;
     }
-  }, [beatClockEndsAt, beatClockRemainingMs, isBeatClock]);
+  }, [beatClockTimerEndsAt, beatClockRemainingMs, isBeatClock]);
 
   // Touch gestures for swipe navigation and pull-to-refresh
   const { attachGestures, isRefreshing: gestureRefreshing } = useTouchGestures({
@@ -892,7 +907,7 @@ export default function ActiveQuiz() {
             style={{ fontSize: "clamp(6rem, 22vw, 18rem)" }}
             aria-live="polite"
           >
-            {beatClockEndsAt
+            {beatClockTimerEndsAt
               ? formatBeatClockTime(beatClockRemainingMs)
               : "--:--"}
           </div>
@@ -901,7 +916,7 @@ export default function ActiveQuiz() {
               Time is almost up
             </div>
           )}
-          {!beatClockEndsAt && (
+          {!beatClockTimerEndsAt && (
             <div className="mt-8 text-2xl text-stone-300 animate-pulse">
               Starting timer...
             </div>

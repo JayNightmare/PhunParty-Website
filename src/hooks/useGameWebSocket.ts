@@ -96,6 +96,12 @@ export const getPlayerKey = (
 const getEventPlayerKey = (data: any): string =>
   data?.roster_player_id || data?.player_key || data?.player_id || data?.id || "";
 
+const isBeatClockGameType = (value?: unknown) => {
+  if (!value) return false;
+  const compact = String(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return compact.includes("beattheclock") || compact.includes("beatclock");
+};
+
 export interface UseGameWebSocketOptions extends Omit<
   UseWebSocketOptions,
   "onMessage" | "onError"
@@ -538,8 +544,13 @@ export const useGameWebSocket = (
         const incomingKickedPlayers = incomingPlayers.filter(
           (player) => player.is_kicked,
         );
+        const incomingGameType = state.game_type || raw.game_type || "trivia";
+        const isBeatClockState =
+          isBeatClockGameType(incomingGameType) ||
+          isBeatClockGameType(state.game_state?.game_type) ||
+          isBeatClockGameType(state.current_question?.game_type);
         const normalizedQuestion =
-          phase === "question"
+          phase === "question" && !isBeatClockState
             ? extractQuestion(state.current_question ?? state.question)
             : null;
         const questionStartAt =
@@ -565,7 +576,7 @@ export const useGameWebSocket = (
             prev ||
             ({
               sessionCode: state.session_code || sessionCode,
-              gameType: state.game_type || "trivia",
+              gameType: incomingGameType,
               isActive: phase !== "lobby" && phase !== "ended",
               currentQuestion: null,
               connectedPlayers: [],
@@ -583,7 +594,7 @@ export const useGameWebSocket = (
           return {
             ...base,
             sessionCode: state.session_code || raw.session_code || sessionCode,
-            gameType: state.game_type || base.gameType || "trivia",
+            gameType: incomingGameType || base.gameType || "trivia",
             phase: shouldDelayQuestion ? "countdown" : phase,
             isActive: phase !== "lobby" && phase !== "ended",
             isStarted: phase === "question" && !shouldDelayQuestion,
@@ -616,7 +627,7 @@ export const useGameWebSocket = (
               ...(base.game_state || {}),
               ...state,
             },
-            beatClock: state.beat_clock ?? base.beatClock ?? null,
+            beatClock: state.beat_clock ?? (isBeatClockState ? state : base.beatClock) ?? null,
             serverOffsetMs: serverOffsetMsRef.current,
             finalScores:
               state.final_scores ??
@@ -1025,7 +1036,7 @@ export const useGameWebSocket = (
         case "game_started":
           setGameState((prev) => {
             const incomingGameType = message.data?.game_type || "trivia";
-            const isBeatClock = incomingGameType === "beat_the_clock";
+            const isBeatClock = isBeatClockGameType(incomingGameType);
             const incomingPhase =
               message.data?.phase ?? (isBeatClock ? "question" : "intro_audio");
 
