@@ -87,6 +87,9 @@ export default function ActiveQuiz() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const countdownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localCountdownFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const countdownCompleteSentRef = useRef(false);
   const countdownDisplayRef = useRef<number | null>(null);
   const countdownKeyRef = useRef<string | null>(null);
@@ -293,11 +296,12 @@ export default function ActiveQuiz() {
     setIntroMode(true);
     setLocalCountdownFinished(false);
 
-    if (countdownRecoveryRef.current) {
-      clearTimeout(countdownRecoveryRef.current);
+    if (localCountdownFallbackRef.current) {
+      clearTimeout(localCountdownFallbackRef.current);
     }
 
-    countdownRecoveryRef.current = setTimeout(() => {
+    localCountdownFallbackRef.current = setTimeout(() => {
+      localCountdownFallbackRef.current = null;
       const phase = serverPhaseRef.current;
       if (
         phase === "countdown" ||
@@ -638,6 +642,10 @@ export default function ActiveQuiz() {
       if (countdownRecoveryRef.current) {
         clearTimeout(countdownRecoveryRef.current);
         countdownRecoveryRef.current = null;
+      }
+      if (localCountdownFallbackRef.current) {
+        clearTimeout(localCountdownFallbackRef.current);
+        localCountdownFallbackRef.current = null;
       }
     };
   }, []);
