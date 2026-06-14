@@ -482,10 +482,11 @@ export default function ActiveQuiz() {
       type: "intro_complete",
       data: {
         duration_ms: COUNTDOWN_DURATION_MS,
+        game_type: isBeatClock ? "beat_the_clock" : undefined,
       },
     });
     startLocalCountdownFallback("intro_complete_fallback");
-  }, [isConnected, sendMessage, startLocalCountdownFallback]);
+  }, [isBeatClock, isConnected, sendMessage, startLocalCountdownFallback]);
 
   // Handle intro audio playback only when the backend starts the intro phase.
   useEffect(() => {
@@ -1098,6 +1099,7 @@ export default function ActiveQuiz() {
                 type: "skip_intro",
                 data: {
                   duration_ms: COUNTDOWN_DURATION_MS,
+                  game_type: isBeatClock ? "beat_the_clock" : undefined,
                 },
               });
               startLocalCountdownFallback("skip_intro_fallback");
