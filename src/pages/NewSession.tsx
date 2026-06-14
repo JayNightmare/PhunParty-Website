@@ -12,6 +12,9 @@ const isBeatTheClockGameType = (value: string) => {
   return normalized.includes("beat-the-clock") || normalized.includes("beat-clock");
 };
 
+const BEAT_CLOCK_QUESTION_POOL_SIZE = 300;
+const BEAT_CLOCK_DURATION_OPTIONS = [30, 60, 90, 120, 180, 300];
+
 const formatGameType = (value: string) =>
   value
     .replace(/[_-]+/g, " ")
@@ -99,6 +102,7 @@ export default function NewSession() {
   const create = async () => {
     setLoading(true);
     setError(null);
+    const isBeatClock = isBeatTheClockGameType(selectedGameType);
 
     if (!hostName.trim()) {
       setError("Host name is required");
@@ -134,17 +138,13 @@ export default function NewSession() {
       const session = await createSession({
         owner_player_id: user?.id || undefined,
         host_name: hostName.trim(),
-        number_of_questions: num,
+        number_of_questions: isBeatClock ? BEAT_CLOCK_QUESTION_POOL_SIZE : num,
         game_code: gameOfType.game_code, // Use actual game code
         ispublic: true,
-        difficulty: isBeatTheClockGameType(selectedGameType)
-          ? undefined
-          : difficulty,
+        difficulty: isBeatClock ? undefined : difficulty,
         cheat_detection_enabled: fairPlayEnabled,
         max_cheat_strikes: maxFairPlayStrikes,
-        beat_clock_duration_seconds: isBeatTheClockGameType(selectedGameType)
-          ? beatClockDuration
-          : undefined,
+        beat_clock_duration_seconds: isBeatClock ? beatClockDuration : undefined,
       });
       sessionStorage.setItem(
         `phunparty:fair-play:${session.code}`,
@@ -165,6 +165,8 @@ export default function NewSession() {
     }
   };
 
+  const isBeatClockSelected = isBeatTheClockGameType(selectedGameType);
+
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
       <Card className="p-6">
@@ -182,23 +184,25 @@ export default function NewSession() {
               placeholder="Enter your name"
             />
           </div>
-          <div>
-            <label className="block text-sm text-stone-300 mb-1">
-              Number of Questions
-            </label>
-            <input
-              title="Number of Questions"
-              type="number"
-              min={1}
-              max={20}
-              value={num}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                setNum(Number.isFinite(n) ? n : 1);
-              }}
-              className="w-full px-4 py-3 rounded-2xl bg-ink-700 outline-none"
-            />
-          </div>
+          {!isBeatClockSelected && (
+            <div>
+              <label className="block text-sm text-stone-300 mb-1">
+                Number of Questions
+              </label>
+              <input
+                title="Number of Questions"
+                type="number"
+                min={1}
+                max={20}
+                value={num}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  setNum(Number.isFinite(n) ? n : 1);
+                }}
+                className="w-full px-4 py-3 rounded-2xl bg-ink-700 outline-none"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-sm text-stone-300 mb-1">
               Game Type
@@ -222,30 +226,31 @@ export default function NewSession() {
               </select>
             )}
           </div>
-          {isBeatTheClockGameType(selectedGameType) && (
+          {isBeatClockSelected && (
             <div>
               <label className="block text-sm text-stone-300 mb-1">
-                Round Timer
+                Round Time
               </label>
-              <input
+              <select
                 title="Beat the Clock round timer"
-                type="number"
-                min={15}
-                max={600}
-                step={5}
                 value={beatClockDuration}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  setBeatClockDuration(Number.isFinite(n) ? n : 60);
-                }}
+                onChange={(e) => setBeatClockDuration(Number(e.target.value))}
                 className="w-full px-4 py-3 rounded-2xl bg-ink-700 outline-none"
-              />
+              >
+                {BEAT_CLOCK_DURATION_OPTIONS.map((seconds) => (
+                  <option key={seconds} value={seconds}>
+                    {seconds < 60
+                      ? `${seconds} seconds`
+                      : `${seconds / 60} minute${seconds === 60 ? "" : "s"}`}
+                  </option>
+                ))}
+              </select>
               <p className="text-xs text-stone-400 mt-2">
                 Seconds each player has to answer as many questions as possible.
               </p>
             </div>
           )}
-          {!isBeatTheClockGameType(selectedGameType) && (
+          {!isBeatClockSelected && (
           <div>
             <label className="block text-sm text-stone-300 mb-1">
               Difficulty
