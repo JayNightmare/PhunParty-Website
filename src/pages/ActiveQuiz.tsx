@@ -97,9 +97,6 @@ export default function ActiveQuiz() {
   const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const localCountdownFallbackRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
   const countdownCompleteSentRef = useRef(false);
   const countdownDisplayRef = useRef<number | null>(null);
   const countdownKeyRef = useRef<string | null>(null);
@@ -107,7 +104,6 @@ export default function ActiveQuiz() {
   const countdownQuestionStartAtRef = useRef<string | null>(null);
   const serverOffsetMsRef = useRef(0);
   const localCountdownActiveRef = useRef(false);
-  const serverPhaseRef = useRef<string | undefined>(undefined);
   const sendMessageRef = useRef<((message: any) => void) | undefined>(
     undefined,
   );
@@ -215,10 +211,6 @@ export default function ActiveQuiz() {
     serverOffsetMsRef.current = serverOffsetMs;
   }, [serverOffsetMs]);
 
-  useEffect(() => {
-    serverPhaseRef.current = serverPhase;
-  }, [serverPhase]);
-
   const hasProtocolState = Boolean(serverPhase);
   const questionIsVisible = hasProtocolState
     ? serverPhase === "question" && !isBeatClock
@@ -294,9 +286,12 @@ export default function ActiveQuiz() {
             clearInterval(countdownRef.current);
             countdownRef.current = null;
           }
-          resetCountdownDisplay();
+          setCountdownDisplay(0);
           setLocalCountdownFinished(true);
-          sendCountdownComplete();
+          window.setTimeout(() => {
+            sendCountdownComplete();
+            resetCountdownDisplay();
+          }, 350);
         }
       };
 
@@ -310,38 +305,16 @@ export default function ActiveQuiz() {
     [resetCountdownDisplay, setCountdownDisplay],
   );
 
-  const startLocalCountdownFallback = useCallback(
-    (reason: string) => {
-      setIntroMode(true);
-      setLocalCountdownFinished(false);
-
-      if (localCountdownFallbackRef.current) {
-        clearTimeout(localCountdownFallbackRef.current);
-      }
-
-      localCountdownFallbackRef.current = setTimeout(() => {
-        localCountdownFallbackRef.current = null;
-        const phase = serverPhaseRef.current;
-        if (
-          phase === "countdown" ||
-          phase === "question" ||
-          phase === "ended"
-        ) {
-          return;
-        }
-        runLocalCountdownFallback(reason);
-      }, 2500);
-    },
-    [runLocalCountdownFallback],
-  );
-
   useEffect(() => {
-    if (beatClockTimerEndsAt || serverPhase === "ended") {
+    if (
+      serverPhase === "ended" ||
+      (beatClockTimerEndsAt && countdown === null)
+    ) {
       localCountdownActiveRef.current = false;
       setLocalCountdownActive(false);
       setLocalCountdownFinished(false);
     }
-  }, [beatClockTimerEndsAt, serverPhase]);
+  }, [beatClockTimerEndsAt, countdown, serverPhase]);
 
   useEffect(() => {
     if (!isBeatClock || !beatClockTimerEndsAt) {
@@ -454,6 +427,11 @@ export default function ActiveQuiz() {
   useEffect(() => {
     if (!serverPhase) return;
 
+    if (localCountdownActive && !localCountdownFinished) {
+      setIntroMode(true);
+      return;
+    }
+
     if (
       serverPhase === "intro_audio" ||
       serverPhase === "countdown_pending" ||
@@ -464,7 +442,7 @@ export default function ActiveQuiz() {
     }
 
     setIntroMode(false);
-  }, [isBeatClock, serverPhase]);
+  }, [isBeatClock, localCountdownActive, localCountdownFinished, serverPhase]);
 
   const sendIntroComplete = useCallback(() => {
     if (introCompleteSentRef.current || !sendMessage || !isConnected) return;
@@ -478,8 +456,8 @@ export default function ActiveQuiz() {
         game_type: isBeatClock ? "beat_the_clock" : undefined,
       },
     });
-    startLocalCountdownFallback("intro_complete_fallback");
-  }, [isBeatClock, isConnected, sendMessage, startLocalCountdownFallback]);
+    runLocalCountdownFallback("intro_complete_countdown");
+  }, [isBeatClock, isConnected, runLocalCountdownFallback, sendMessage]);
 
   // Handle intro audio playback only when the backend starts the intro phase.
   useEffect(() => {
@@ -543,6 +521,10 @@ export default function ActiveQuiz() {
       return;
     }
 
+    if (localCountdownActiveRef.current) {
+      return;
+    }
+
     const durationMs = serverCountdown?.durationMs ?? COUNTDOWN_DURATION_MS;
     const displayTargetMs = Date.now() + durationMs;
     const questionStartAtIso =
@@ -594,14 +576,17 @@ export default function ActiveQuiz() {
       setCountdownDisplay(displayNumber);
 
       if (remainingMs <= 0) {
-        sendCountdownComplete();
         if (countdownRef.current) {
           clearInterval(countdownRef.current);
           countdownRef.current = null;
         }
-        setCountdown(null);
+        setCountdownDisplay(0);
         setLocalCountdownFinished(true);
         countdownTargetMsRef.current = null;
+        window.setTimeout(() => {
+          sendCountdownComplete();
+          setCountdown(null);
+        }, 350);
       }
     };
 
@@ -627,10 +612,6 @@ export default function ActiveQuiz() {
       if (countdownRecoveryRef.current) {
         clearTimeout(countdownRecoveryRef.current);
         countdownRecoveryRef.current = null;
-      }
-      if (localCountdownFallbackRef.current) {
-        clearTimeout(localCountdownFallbackRef.current);
-        localCountdownFallbackRef.current = null;
       }
     };
   }, []);
@@ -1036,6 +1017,7 @@ export default function ActiveQuiz() {
           ).length,
       );
   const shouldShowIntroOverlay =
+    (countdown !== null && serverPhase !== "ended") ||
     introMode ||
     (isBeatClock &&
       !beatClockTimerEndsAt &&
@@ -1089,7 +1071,7 @@ export default function ActiveQuiz() {
                   game_type: isBeatClock ? "beat_the_clock" : undefined,
                 },
               });
-              startLocalCountdownFallback("skip_intro_fallback");
+              runLocalCountdownFallback("skip_intro_countdown");
             }}
             disabled={skipIntroSent}
             className="px-6 py-3 bg-tea-500 text-ink-900 rounded-xl font-semibold hover:bg-tea-400 transition"
