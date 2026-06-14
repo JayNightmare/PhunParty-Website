@@ -88,12 +88,14 @@ export default function ActiveQuiz() {
   const countdownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownCompleteSentRef = useRef(false);
+  const localCountdownActiveRef = useRef(false);
   const sendMessageRef = useRef<((message: any) => void) | undefined>(undefined);
   const introCompleteSentRef = useRef(false);
   const playedIntroRef = useRef<string | null>(null);
   const beatClockAlertPlayedRef = useRef(false);
   const hasNavigatedToStats = useRef(false);
   const [skipIntroSent, setSkipIntroSent] = useState(false);
+  const [localCountdownActive, setLocalCountdownActive] = useState(false);
   // Timer duration based on difficulty – must be declared before any conditional returns
   const [timerMs, setTimerMs] = useState<number | undefined>(undefined);
   const [beatClockRemainingMs, setBeatClockRemainingMs] = useState(0);
@@ -191,6 +193,8 @@ export default function ActiveQuiz() {
     const questionStartAtMs = Date.now() + COUNTDOWN_DURATION_MS;
 
     setIntroMode(true);
+    localCountdownActiveRef.current = true;
+    setLocalCountdownActive(true);
     countdownCompleteSentRef.current = false;
 
     if (countdownRef.current) {
@@ -241,6 +245,13 @@ export default function ActiveQuiz() {
       COUNTDOWN_DURATION_MS + 1000,
     );
   }, []);
+
+  useEffect(() => {
+    if (beatClockTimerEndsAt || serverPhase === "ended") {
+      localCountdownActiveRef.current = false;
+      setLocalCountdownActive(false);
+    }
+  }, [beatClockTimerEndsAt, serverPhase]);
 
   useEffect(() => {
     if (!isBeatClock || !beatClockTimerEndsAt) {
@@ -416,6 +427,9 @@ export default function ActiveQuiz() {
   // Countdown display follows the backend's question_start_at timestamp.
   useEffect(() => {
     if (serverPhase !== "countdown" || !serverCountdown?.questionStartAt) {
+      if (localCountdownActiveRef.current) {
+        return;
+      }
       setCountdown(null);
       countdownCompleteSentRef.current = false;
       if (countdownRef.current) {
@@ -429,6 +443,8 @@ export default function ActiveQuiz() {
       return;
     }
 
+    localCountdownActiveRef.current = false;
+    setLocalCountdownActive(false);
     countdownCompleteSentRef.current = false;
 
     const sendCountdownComplete = () => {
@@ -486,6 +502,7 @@ export default function ActiveQuiz() {
     serverCountdown?.durationMs,
     serverCountdown?.questionStartAt,
     serverOffsetMs,
+    localCountdownActive,
   ]);
 
   // Process game status updates
