@@ -351,6 +351,7 @@ type BackendGameSession = {
   number_of_questions: number;
   game_code: string;
   owner_player_id?: string;
+  beat_clock_duration_seconds?: number;
 };
 
 type BackendGameStatus = {
@@ -529,9 +530,12 @@ export interface CreateSessionRequest {
   host_name?: string;
   number_of_questions?: number;
   ispublic: boolean;
-  difficulty: string;
+  difficulty?: string;
   cheat_detection_enabled?: boolean;
   max_cheat_strikes?: number;
+  beat_clock_duration_seconds?: number;
+  duration_seconds?: number;
+  timer_seconds?: number;
 }
 
 export interface SubmitAnswerRequest {
@@ -742,9 +746,16 @@ export async function createSession(
     host_name: data.host_name ?? "Host",
     number_of_questions: data.number_of_questions ?? 5,
     ispublic: data.ispublic,
-    difficulty: data.difficulty ?? "Easy",
+    difficulty:
+      data.beat_clock_duration_seconds !== undefined
+        ? undefined
+        : data.difficulty ?? "Easy",
     cheat_detection_enabled: data.cheat_detection_enabled ?? false,
     max_cheat_strikes: data.max_cheat_strikes ?? 3,
+    beat_clock_duration_seconds:
+      data.beat_clock_duration_seconds ??
+      data.duration_seconds ??
+      data.timer_seconds,
   };
 
   const raw = await apiFetch<BackendGameSession>("/game/create/session", {
