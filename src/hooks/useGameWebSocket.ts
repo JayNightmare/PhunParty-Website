@@ -1121,6 +1121,7 @@ export const useGameWebSocket = (
 
             return {
               ...base,
+              gameType: message.data?.game_type || base.gameType,
               phase: "intro_audio",
               introEventId:
                 message.event_id ||
@@ -1158,6 +1159,7 @@ export const useGameWebSocket = (
 
             return {
               ...base,
+              gameType: message.data?.game_type || base.gameType,
               phase: "countdown_pending",
               isActive: true,
               isStarted: false,
@@ -1187,6 +1189,7 @@ export const useGameWebSocket = (
 
             return {
               ...base,
+              gameType: message.data?.game_type || base.gameType,
               phase: "countdown",
               isActive: true,
               isStarted: false,
