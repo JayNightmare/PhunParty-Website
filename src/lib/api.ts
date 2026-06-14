@@ -285,6 +285,9 @@ export interface IsStartedResponse {
 
 export interface GameStatusResponse {
   session_code: string;
+  game_type?: string | null;
+  game_code?: string | null;
+  genre?: string | null;
   game_state: "waiting" | "active" | "ended";
   isstarted: IsStartedResponse["isstarted"];
   current_question_index: number;
@@ -356,6 +359,9 @@ type BackendGameSession = {
 
 type BackendGameStatus = {
   session_code: string;
+  game_type?: string | null;
+  game_code?: string | null;
+  genre?: string | null;
   is_active: boolean;
   is_waiting_for_players: boolean;
   isstarted: IsStartedResponse["isstarted"];
@@ -482,6 +488,9 @@ const mapGameStatus = (raw: BackendGameStatus): GameStatusResponse => {
 
   return {
     session_code: raw.session_code,
+    game_type: raw.game_type ?? null,
+    game_code: raw.game_code ?? null,
+    genre: raw.genre ?? null,
     game_state: raw.is_active
       ? raw.isstarted
         ? "active"

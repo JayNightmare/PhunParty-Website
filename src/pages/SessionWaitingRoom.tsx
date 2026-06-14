@@ -10,6 +10,13 @@ import { getPlayerKey } from "@/hooks/useGameWebSocket";
 import WebSocketStatus from "@/components/WebSocketStatus";
 import { useToast } from "@/contexts/ToastContext";
 
+const isBeatClockGameType = (...candidates: unknown[]) =>
+  candidates.some((candidate) => {
+    if (!candidate) return false;
+    const compact = String(candidate).toLowerCase().replace(/[^a-z0-9]+/g, "");
+    return compact.includes("beattheclock") || compact.includes("beatclock");
+  });
+
 export default function SessionWaitingRoom() {
   const { sessionCode } = useParams();
   const navigate = useNavigate();
@@ -189,7 +196,24 @@ export default function SessionWaitingRoom() {
       showSuccess(`Launching tutorial with ${wsPlayerCount} player(s)...`);
       // Send WebSocket start signal BEFORE navigation to avoid unmount race
       try {
-        wsStartGame();
+        if (
+          sendMessage &&
+          isBeatClockGameType(
+            (game_status as any)?.game_type,
+            (game_status as any)?.gameType,
+            (game_status as any)?.genre,
+            (game_status as any)?.game_code,
+          )
+        ) {
+          sendMessage({
+            type: "start_game",
+            data: {
+              game_type: "beat_the_clock",
+            },
+          });
+        } else {
+          wsStartGame();
+        }
         // Wait a moment to ensure the WebSocket message is fully sent before navigating
         await new Promise((resolve) => setTimeout(resolve, 200));
       } catch (e) {
