@@ -89,6 +89,9 @@ export default function ActiveQuiz() {
   const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownCompleteSentRef = useRef(false);
   const countdownDisplayRef = useRef<number | null>(null);
+  const countdownKeyRef = useRef<string | null>(null);
+  const countdownTargetMsRef = useRef<number | null>(null);
+  const countdownQuestionStartAtRef = useRef<string | null>(null);
   const serverOffsetMsRef = useRef(0);
   const localCountdownActiveRef = useRef(false);
   const serverPhaseRef = useRef<string | undefined>(undefined);
@@ -205,6 +208,9 @@ export default function ActiveQuiz() {
 
   const resetCountdownDisplay = useCallback(() => {
     countdownDisplayRef.current = null;
+    countdownKeyRef.current = null;
+    countdownTargetMsRef.current = null;
+    countdownQuestionStartAtRef.current = null;
     setCountdown(null);
   }, []);
 
@@ -220,6 +226,7 @@ export default function ActiveQuiz() {
 
   const runLocalCountdownFallback = useCallback((reason: string) => {
     const questionStartAtMs = Date.now() + COUNTDOWN_DURATION_MS;
+    const questionStartAtIso = new Date(questionStartAtMs).toISOString();
 
     setIntroMode(true);
     localCountdownActiveRef.current = true;
@@ -227,6 +234,9 @@ export default function ActiveQuiz() {
     setLocalCountdownFinished(false);
     countdownCompleteSentRef.current = false;
     countdownDisplayRef.current = null;
+    countdownKeyRef.current = `local:${questionStartAtIso}`;
+    countdownTargetMsRef.current = questionStartAtMs;
+    countdownQuestionStartAtRef.current = questionStartAtIso;
 
     if (countdownRef.current) {
       clearInterval(countdownRef.current);
@@ -243,7 +253,7 @@ export default function ActiveQuiz() {
       sendMessageRef.current?.({
         type: "countdown_complete",
         data: {
-          question_start_at: new Date(questionStartAtMs).toISOString(),
+          question_start_at: questionStartAtIso,
           reason,
         },
       });
@@ -507,9 +517,9 @@ export default function ActiveQuiz() {
     };
   }, [serverPhase, introEventId, sessionId, sendIntroComplete]);
 
-  // Countdown display follows the backend's question_start_at timestamp.
+  // Countdown display locks to the first countdown target for this phase.
   useEffect(() => {
-    if (serverPhase !== "countdown" || !serverCountdown?.questionStartAt) {
+    if (serverPhase !== "countdown") {
       if (localCountdownActiveRef.current) {
         return;
       }
@@ -526,10 +536,29 @@ export default function ActiveQuiz() {
       return;
     }
 
+    const durationMs = serverCountdown?.durationMs ?? COUNTDOWN_DURATION_MS;
+    const parsedQuestionStartAtMs = Date.parse(
+      String(serverCountdown?.questionStartAt || ""),
+    );
+    const questionStartAtMs = Number.isNaN(parsedQuestionStartAtMs)
+      ? Date.now() + durationMs
+      : parsedQuestionStartAtMs;
+    const questionStartAtIso =
+      serverCountdown?.questionStartAt ||
+      new Date(questionStartAtMs).toISOString();
+    const countdownKey = `server:${questionStartAtIso}`;
+
+    if (countdownKeyRef.current && countdownRef.current) {
+      return;
+    }
+
     localCountdownActiveRef.current = false;
     setLocalCountdownActive(false);
     countdownCompleteSentRef.current = false;
     countdownDisplayRef.current = null;
+    countdownKeyRef.current = countdownKey;
+    countdownTargetMsRef.current = questionStartAtMs;
+    countdownQuestionStartAtRef.current = questionStartAtIso;
     if (countdownRef.current) {
       clearInterval(countdownRef.current);
       countdownRef.current = null;
@@ -545,18 +574,16 @@ export default function ActiveQuiz() {
       sendMessageRef.current?.({
         type: "countdown_complete",
         data: {
-          question_start_at: serverCountdown.questionStartAt,
+          question_start_at: countdownQuestionStartAtRef.current,
         },
       });
     };
 
     const updateCountdown = () => {
-      const questionStartAtMs = Date.parse(serverCountdown.questionStartAt);
+      const targetMs = countdownTargetMsRef.current ?? questionStartAtMs;
       const remainingMs = Math.max(
         0,
-        Number.isNaN(questionStartAtMs)
-          ? serverCountdown.durationMs ?? COUNTDOWN_DURATION_MS
-          : questionStartAtMs - (Date.now() + serverOffsetMsRef.current),
+        targetMs - (Date.now() + serverOffsetMsRef.current),
       );
       const displayNumber =
         remainingMs > 0
@@ -576,7 +603,7 @@ export default function ActiveQuiz() {
     countdownRef.current = setInterval(updateCountdown, 200);
     countdownRecoveryRef.current = setTimeout(
       sendCountdownComplete,
-      (serverCountdown.durationMs ?? COUNTDOWN_DURATION_MS) + 2000,
+      durationMs + 2000,
     );
 
     return () => {
@@ -591,8 +618,6 @@ export default function ActiveQuiz() {
     };
   }, [
     serverPhase,
-    serverCountdown?.durationMs,
-    serverCountdown?.questionStartAt,
     resetCountdownDisplay,
     setCountdownDisplay,
   ]);
