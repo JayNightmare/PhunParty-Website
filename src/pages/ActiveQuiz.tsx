@@ -91,10 +91,12 @@ export default function ActiveQuiz() {
   const countdownDisplayRef = useRef<number | null>(null);
   const serverOffsetMsRef = useRef(0);
   const localCountdownActiveRef = useRef(false);
+  const serverPhaseRef = useRef<string | undefined>(undefined);
   const sendMessageRef = useRef<((message: any) => void) | undefined>(undefined);
   const introCompleteSentRef = useRef(false);
   const playedIntroRef = useRef<string | null>(null);
   const beatClockAlertPlayedRef = useRef(false);
+  const beatClockEndSentRef = useRef(false);
   const hasNavigatedToStats = useRef(false);
   const [skipIntroSent, setSkipIntroSent] = useState(false);
   const [localCountdownActive, setLocalCountdownActive] = useState(false);
@@ -192,6 +194,10 @@ export default function ActiveQuiz() {
     serverOffsetMsRef.current = serverOffsetMs;
   }, [serverOffsetMs]);
 
+  useEffect(() => {
+    serverPhaseRef.current = serverPhase;
+  }, [serverPhase]);
+
   const hasProtocolState = Boolean(serverPhase);
   const questionIsVisible = hasProtocolState
     ? serverPhase === "question" && !isBeatClock
@@ -212,7 +218,7 @@ export default function ActiveQuiz() {
     });
   }, []);
 
-  const startLocalCountdownFallback = useCallback((reason: string) => {
+  const runLocalCountdownFallback = useCallback((reason: string) => {
     const questionStartAtMs = Date.now() + COUNTDOWN_DURATION_MS;
 
     setIntroMode(true);
@@ -238,13 +244,6 @@ export default function ActiveQuiz() {
         type: "countdown_complete",
         data: {
           question_start_at: new Date(questionStartAtMs).toISOString(),
-          reason,
-        },
-      });
-      sendMessageRef.current?.({
-        type: "start_beat_clock_round",
-        data: {
-          game_type: "beat_the_clock",
           reason,
         },
       });
@@ -280,6 +279,27 @@ export default function ActiveQuiz() {
     );
   }, [resetCountdownDisplay, setCountdownDisplay]);
 
+  const startLocalCountdownFallback = useCallback((reason: string) => {
+    setIntroMode(true);
+    setLocalCountdownFinished(false);
+
+    if (countdownRecoveryRef.current) {
+      clearTimeout(countdownRecoveryRef.current);
+    }
+
+    countdownRecoveryRef.current = setTimeout(() => {
+      const phase = serverPhaseRef.current;
+      if (
+        phase === "countdown" ||
+        phase === "question" ||
+        phase === "ended"
+      ) {
+        return;
+      }
+      runLocalCountdownFallback(reason);
+    }, 2500);
+  }, [runLocalCountdownFallback]);
+
   useEffect(() => {
     if (beatClockTimerEndsAt || serverPhase === "ended") {
       localCountdownActiveRef.current = false;
@@ -292,6 +312,7 @@ export default function ActiveQuiz() {
     if (!isBeatClock || !beatClockTimerEndsAt) {
       setBeatClockRemainingMs(0);
       beatClockAlertPlayedRef.current = false;
+      beatClockEndSentRef.current = false;
       return;
     }
 
@@ -307,6 +328,33 @@ export default function ActiveQuiz() {
     const interval = window.setInterval(updateRemaining, 200);
     return () => window.clearInterval(interval);
   }, [beatClockTimerEndsAt, isBeatClock, serverOffsetMs]);
+
+  useEffect(() => {
+    if (
+      !isBeatClock ||
+      !beatClockTimerEndsAt ||
+      beatClockRemainingMs > 0 ||
+      beatClockEndSentRef.current ||
+      serverPhase === "ended" ||
+      game_state === "ended"
+    ) {
+      return;
+    }
+
+    beatClockEndSentRef.current = true;
+    try {
+      wsGameControls.endGame();
+    } catch (err) {
+      console.warn("Beat the Clock host expiry end signal failed.", err);
+    }
+  }, [
+    beatClockRemainingMs,
+    beatClockTimerEndsAt,
+    game_state,
+    isBeatClock,
+    serverPhase,
+    wsGameControls,
+  ]);
 
   useEffect(() => {
     if (!isBeatClock || !beatClockTimerEndsAt) return;
