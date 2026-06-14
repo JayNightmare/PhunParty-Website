@@ -523,6 +523,7 @@ export default function ActiveQuiz() {
       const countdownIsRunning = Boolean(countdownTargetMsRef.current);
       const shouldKeepCountdown =
         countdownIsRunning &&
+        !countdownCompleteSentRef.current &&
         serverPhase !== "question" &&
         serverPhase !== "ended" &&
         !beatClockTimerEndsAt;
@@ -604,6 +605,13 @@ export default function ActiveQuiz() {
 
       if (remainingMs <= 0) {
         sendCountdownComplete();
+        if (countdownRef.current) {
+          clearInterval(countdownRef.current);
+          countdownRef.current = null;
+        }
+        setCountdown(null);
+        setLocalCountdownFinished(true);
+        countdownTargetMsRef.current = null;
       }
     };
 
