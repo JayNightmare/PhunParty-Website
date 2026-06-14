@@ -544,15 +544,10 @@ export default function ActiveQuiz() {
     }
 
     const durationMs = serverCountdown?.durationMs ?? COUNTDOWN_DURATION_MS;
-    const parsedQuestionStartAtMs = Date.parse(
-      String(serverCountdown?.questionStartAt || ""),
-    );
-    const questionStartAtMs = Number.isNaN(parsedQuestionStartAtMs)
-      ? Date.now() + durationMs
-      : parsedQuestionStartAtMs;
+    const displayTargetMs = Date.now() + durationMs;
     const questionStartAtIso =
       serverCountdown?.questionStartAt ||
-      new Date(questionStartAtMs).toISOString();
+      new Date(displayTargetMs).toISOString();
     const countdownKey = `server:${questionStartAtIso}`;
 
     if (countdownKeyRef.current) {
@@ -564,7 +559,7 @@ export default function ActiveQuiz() {
     countdownCompleteSentRef.current = false;
     countdownDisplayRef.current = null;
     countdownKeyRef.current = countdownKey;
-    countdownTargetMsRef.current = questionStartAtMs;
+    countdownTargetMsRef.current = displayTargetMs;
     countdownQuestionStartAtRef.current = questionStartAtIso;
     if (countdownRef.current) {
       clearInterval(countdownRef.current);
@@ -587,11 +582,8 @@ export default function ActiveQuiz() {
     };
 
     const updateCountdown = () => {
-      const targetMs = countdownTargetMsRef.current ?? questionStartAtMs;
-      const remainingMs = Math.max(
-        0,
-        targetMs - (Date.now() + serverOffsetMsRef.current),
-      );
+      const targetMs = countdownTargetMsRef.current ?? displayTargetMs;
+      const remainingMs = Math.max(0, targetMs - Date.now());
       const displayNumber =
         remainingMs > 0
           ? Math.max(
