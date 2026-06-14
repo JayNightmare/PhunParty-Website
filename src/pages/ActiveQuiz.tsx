@@ -520,9 +520,17 @@ export default function ActiveQuiz() {
   // Countdown display locks to the first countdown target for this phase.
   useEffect(() => {
     if (serverPhase !== "countdown") {
-      if (localCountdownActiveRef.current) {
+      const countdownIsRunning = Boolean(countdownTargetMsRef.current);
+      const shouldKeepCountdown =
+        countdownIsRunning &&
+        serverPhase !== "question" &&
+        serverPhase !== "ended" &&
+        !beatClockTimerEndsAt;
+
+      if (localCountdownActiveRef.current || shouldKeepCountdown) {
         return;
       }
+
       resetCountdownDisplay();
       countdownCompleteSentRef.current = false;
       if (countdownRef.current) {
@@ -548,7 +556,7 @@ export default function ActiveQuiz() {
       new Date(questionStartAtMs).toISOString();
     const countdownKey = `server:${questionStartAtIso}`;
 
-    if (countdownKeyRef.current && countdownRef.current) {
+    if (countdownKeyRef.current) {
       return;
     }
 
@@ -606,6 +614,14 @@ export default function ActiveQuiz() {
       durationMs + 2000,
     );
 
+  }, [
+    beatClockTimerEndsAt,
+    serverPhase,
+    resetCountdownDisplay,
+    setCountdownDisplay,
+  ]);
+
+  useEffect(() => {
     return () => {
       if (countdownRef.current) {
         clearInterval(countdownRef.current);
@@ -616,11 +632,7 @@ export default function ActiveQuiz() {
         countdownRecoveryRef.current = null;
       }
     };
-  }, [
-    serverPhase,
-    resetCountdownDisplay,
-    setCountdownDisplay,
-  ]);
+  }, []);
 
   // Process game status updates
   useEffect(() => {
