@@ -244,10 +244,29 @@ export default function ActiveQuiz() {
     });
   }, []);
 
-  const runLocalCountdownFallback = useCallback(
-    (reason: string) => {
-      const questionStartAtMs = Date.now() + COUNTDOWN_DURATION_MS;
-      const questionStartAtIso = new Date(questionStartAtMs).toISOString();
+  const runSynchronizedCountIn = useCallback(
+    ({
+      startAt,
+      durationMs,
+      questionStartAt,
+      reason,
+    }: {
+      startAt?: string;
+      durationMs?: number;
+      questionStartAt?: string;
+      reason: string;
+    }) => {
+      const safeDurationMs = durationMs || COUNTDOWN_DURATION_MS;
+      const parsedQuestionStartAtMs = Date.parse(String(questionStartAt || ""));
+      const parsedStartAtMs = Date.parse(String(startAt || ""));
+      const questionStartAtMs = Number.isNaN(parsedQuestionStartAtMs)
+        ? Date.now() + safeDurationMs
+        : parsedQuestionStartAtMs;
+      const countdownStartAtMs = Number.isNaN(parsedStartAtMs)
+        ? questionStartAtMs - safeDurationMs
+        : parsedStartAtMs;
+      const questionStartAtIso =
+        questionStartAt || new Date(questionStartAtMs).toISOString();
 
       setIntroMode(true);
       localCountdownActiveRef.current = true;
@@ -283,26 +302,39 @@ export default function ActiveQuiz() {
         });
       };
 
+      const delayUntil = (targetMs: number) =>
+        Math.max(0, targetMs - (Date.now() + serverOffsetMsRef.current));
+
       setCountdownDisplay(MAX_COUNTDOWN_SECONDS);
       countdownStepTimersRef.current = [
-        window.setTimeout(() => setCountdownDisplay(2), 1000),
-        window.setTimeout(() => setCountdownDisplay(1), 2000),
+        window.setTimeout(
+          () => setCountdownDisplay(MAX_COUNTDOWN_SECONDS),
+          delayUntil(countdownStartAtMs),
+        ),
+        window.setTimeout(
+          () => setCountdownDisplay(2),
+          delayUntil(countdownStartAtMs + 1000),
+        ),
+        window.setTimeout(
+          () => setCountdownDisplay(1),
+          delayUntil(countdownStartAtMs + 2000),
+        ),
         window.setTimeout(() => {
           setCountdownDisplay(0);
           setLocalCountdownFinished(true);
-          sendCountdownComplete();
-        }, COUNTDOWN_DURATION_MS),
+        }, delayUntil(questionStartAtMs)),
         window.setTimeout(() => {
+          sendCountdownComplete();
           countInLockedRef.current = false;
           setCountInLocked(false);
           localCountdownActiveRef.current = false;
           setLocalCountdownActive(false);
           resetCountdownDisplay();
-        }, COUNTDOWN_DURATION_MS + 450),
+        }, delayUntil(questionStartAtMs + 450)),
       ];
       countdownRecoveryRef.current = setTimeout(
         sendCountdownComplete,
-        COUNTDOWN_DURATION_MS + 1500,
+        delayUntil(questionStartAtMs + 1500),
       );
     },
     [clearCountdownStepTimers, resetCountdownDisplay, setCountdownDisplay],
@@ -488,8 +520,7 @@ export default function ActiveQuiz() {
         game_type: isBeatClock ? "beat_the_clock" : undefined,
       },
     });
-    runLocalCountdownFallback("intro_complete_countdown");
-  }, [isBeatClock, isConnected, runLocalCountdownFallback, sendMessage]);
+  }, [isBeatClock, isConnected, sendMessage]);
 
   // Handle intro audio playback only when the backend starts the intro phase.
   useEffect(() => {
@@ -558,78 +589,25 @@ export default function ActiveQuiz() {
     }
 
     const durationMs = serverCountdown?.durationMs ?? COUNTDOWN_DURATION_MS;
-    const displayTargetMs = Date.now() + durationMs;
     const questionStartAtIso =
       serverCountdown?.questionStartAt ||
-      new Date(displayTargetMs).toISOString();
+      new Date(Date.now() + durationMs).toISOString();
     const countdownKey = `server:${questionStartAtIso}`;
 
     if (countdownKeyRef.current) {
       return;
     }
 
-    localCountdownActiveRef.current = false;
-    setLocalCountdownActive(false);
-    countdownCompleteSentRef.current = false;
-    countdownDisplayRef.current = null;
     countdownKeyRef.current = countdownKey;
-    countdownTargetMsRef.current = displayTargetMs;
-    countdownQuestionStartAtRef.current = questionStartAtIso;
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current);
-      countdownRef.current = null;
-    }
-    if (countdownRecoveryRef.current) {
-      clearTimeout(countdownRecoveryRef.current);
-      countdownRecoveryRef.current = null;
-    }
-
-    const sendCountdownComplete = () => {
-      if (countdownCompleteSentRef.current) return;
-      countdownCompleteSentRef.current = true;
-      sendMessageRef.current?.({
-        type: "countdown_complete",
-        data: {
-          question_start_at: countdownQuestionStartAtRef.current,
-        },
-      });
-    };
-
-    const updateCountdown = () => {
-      const targetMs = countdownTargetMsRef.current ?? displayTargetMs;
-      const remainingMs = Math.max(0, targetMs - Date.now());
-      const displayNumber =
-        remainingMs > 0
-          ? Math.max(
-              1,
-              Math.min(MAX_COUNTDOWN_SECONDS, Math.ceil(remainingMs / 1000)),
-            )
-          : 0;
-      setCountdownDisplay(displayNumber);
-
-      if (remainingMs <= 0) {
-        if (countdownRef.current) {
-          clearInterval(countdownRef.current);
-          countdownRef.current = null;
-        }
-        setCountdownDisplay(0);
-        setLocalCountdownFinished(true);
-        countdownTargetMsRef.current = null;
-        window.setTimeout(() => {
-          sendCountdownComplete();
-          setCountdown(null);
-        }, 350);
-      }
-    };
-
-    updateCountdown();
-    countdownRef.current = setInterval(updateCountdown, 200);
-    countdownRecoveryRef.current = setTimeout(
-      sendCountdownComplete,
-      durationMs + 2000,
-    );
+    runSynchronizedCountIn({
+      startAt: serverCountdown?.startAt,
+      durationMs,
+      questionStartAt: questionStartAtIso,
+      reason: "server_countdown",
+    });
   }, [
     beatClockTimerEndsAt,
+    runSynchronizedCountIn,
     serverPhase,
     resetCountdownDisplay,
     setCountdownDisplay,
@@ -1105,7 +1083,6 @@ export default function ActiveQuiz() {
                   game_type: isBeatClock ? "beat_the_clock" : undefined,
                 },
               });
-              runLocalCountdownFallback("skip_intro_countdown");
             }}
             disabled={skipIntroSent}
             className="px-6 py-3 bg-tea-500 text-ink-900 rounded-xl font-semibold hover:bg-tea-400 transition"
