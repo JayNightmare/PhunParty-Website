@@ -164,7 +164,14 @@ export default function ActiveQuiz() {
       wsQuestion?.gameType,
       wsQuestion?.game_type,
       wsQuestion?.genre,
+      wsQuestion?.question_id,
+      wsQuestion?.id,
       question?.genre,
+      question?.id,
+      (game_status as any)?.current_question_id,
+      (game_status as any)?.currentQuestionId,
+      (game_status as any)?.current_question?.question_id,
+      (game_status as any)?.currentQuestion?.questionId,
       (game_status as any)?.game_type,
       (game_status as any)?.gameType,
       (game_status as any)?.genre,
@@ -1056,7 +1063,8 @@ export default function ActiveQuiz() {
     (isBeatClock &&
       !beatClockTimerEndsAt &&
       game_state !== "ended" &&
-      serverPhase !== "ended");
+      serverPhase !== "ended" &&
+      serverPhase !== "question");
 
   // Intro screen overlay
   if (shouldShowIntroOverlay) {
