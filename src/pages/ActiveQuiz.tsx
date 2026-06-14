@@ -36,6 +36,13 @@ const formatBeatClockTime = (remainingMs: number) => {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 };
 
+const isBeatClockGameType = (...candidates: unknown[]) =>
+  candidates.some((candidate) => {
+    if (!candidate) return false;
+    const compact = String(candidate).toLowerCase().replace(/[^a-z0-9]+/g, "");
+    return compact.includes("beattheclock") || compact.includes("beatclock");
+  });
+
 const playBeatClockWarningBuzz = () => {
   try {
     const AudioContextCtor =
@@ -118,10 +125,28 @@ export default function ActiveQuiz() {
   const serverOffsetMs = (wsGameState as any)?.serverOffsetMs || 0;
   const wsQuestion = (wsGameState as any)?.currentQuestion;
   const wsGameMetadata = (wsGameState as any)?.game_state;
-  const wsGameType = String((wsGameState as any)?.gameType || "").toLowerCase();
-  const isBeatClock = wsGameType === "beat_the_clock";
   const beatClockState =
     (wsGameState as any)?.beatClock || wsGameMetadata?.beat_clock || null;
+  const hasActiveBeatClockState = Boolean(
+    beatClockState?.active ||
+      beatClockState?.ends_at ||
+      beatClockState?.endsAt ||
+      beatClockState?.started_at ||
+      beatClockState?.startedAt,
+  );
+  const isBeatClock =
+    isBeatClockGameType(
+      (wsGameState as any)?.gameType,
+      (wsGameState as any)?.game_type,
+      (wsGameState as any)?.genre,
+      wsGameMetadata?.gameType,
+      wsGameMetadata?.game_type,
+      wsGameMetadata?.genre,
+      (game_status as any)?.game_type,
+      (game_status as any)?.gameType,
+      (game_status as any)?.genre,
+      (game_status as any)?.game_code,
+    ) || hasActiveBeatClockState;
   const beatClockEndsAt =
     beatClockState?.ends_at ?? beatClockState?.endsAt ?? null;
   const questionEndsAt =
