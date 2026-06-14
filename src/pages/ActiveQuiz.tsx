@@ -114,7 +114,6 @@ export default function ActiveQuiz() {
   const introCompleteSentRef = useRef(false);
   const playedIntroRef = useRef<string | null>(null);
   const beatClockAlertPlayedRef = useRef(false);
-  const beatClockEndSentRef = useRef(false);
   const hasNavigatedToStats = useRef(false);
   const [skipIntroSent, setSkipIntroSent] = useState(false);
   const [localCountdownActive, setLocalCountdownActive] = useState(false);
@@ -348,7 +347,6 @@ export default function ActiveQuiz() {
     if (!isBeatClock || !beatClockTimerEndsAt) {
       setBeatClockRemainingMs(0);
       beatClockAlertPlayedRef.current = false;
-      beatClockEndSentRef.current = false;
       return;
     }
 
@@ -364,39 +362,6 @@ export default function ActiveQuiz() {
     const interval = window.setInterval(updateRemaining, 200);
     return () => window.clearInterval(interval);
   }, [beatClockTimerEndsAt, isBeatClock, serverOffsetMs]);
-
-  useEffect(() => {
-    const endsAtMs = beatClockTimerEndsAt
-      ? Date.parse(beatClockTimerEndsAt)
-      : NaN;
-    const isTimerActuallyExpired =
-      Number.isFinite(endsAtMs) && endsAtMs <= Date.now() + serverOffsetMs;
-
-    if (
-      !isBeatClock ||
-      !beatClockTimerEndsAt ||
-      !isTimerActuallyExpired ||
-      beatClockEndSentRef.current ||
-      serverPhase === "ended" ||
-      game_state === "ended"
-    ) {
-      return;
-    }
-
-    beatClockEndSentRef.current = true;
-    try {
-      wsGameControls.endGame();
-    } catch (err) {
-      console.warn("Beat the Clock host expiry end signal failed.", err);
-    }
-  }, [
-    beatClockTimerEndsAt,
-    game_state,
-    isBeatClock,
-    serverPhase,
-    serverOffsetMs,
-    wsGameControls,
-  ]);
 
   useEffect(() => {
     if (!isBeatClock || !beatClockTimerEndsAt) return;
