@@ -187,6 +187,61 @@ export default function ActiveQuiz() {
     ? serverPhase === "question" && !isBeatClock
     : !!game_status?.isstarted;
 
+  const startLocalCountdownFallback = useCallback((reason: string) => {
+    const questionStartAtMs = Date.now() + COUNTDOWN_DURATION_MS;
+
+    setIntroMode(true);
+    countdownCompleteSentRef.current = false;
+
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    if (countdownRecoveryRef.current) {
+      clearTimeout(countdownRecoveryRef.current);
+      countdownRecoveryRef.current = null;
+    }
+
+    const sendCountdownComplete = () => {
+      if (countdownCompleteSentRef.current) return;
+      countdownCompleteSentRef.current = true;
+      sendMessageRef.current?.({
+        type: "countdown_complete",
+        data: {
+          question_start_at: new Date(questionStartAtMs).toISOString(),
+          reason,
+        },
+      });
+    };
+
+    const updateCountdown = () => {
+      const remainingMs = Math.max(0, questionStartAtMs - Date.now());
+      const displayNumber =
+        remainingMs > 0
+          ? Math.max(
+              1,
+              Math.min(MAX_COUNTDOWN_SECONDS, Math.ceil(remainingMs / 1000)),
+            )
+          : 0;
+      setCountdown(displayNumber);
+
+      if (remainingMs <= 0) {
+        if (countdownRef.current) {
+          clearInterval(countdownRef.current);
+          countdownRef.current = null;
+        }
+        sendCountdownComplete();
+      }
+    };
+
+    updateCountdown();
+    countdownRef.current = setInterval(updateCountdown, 200);
+    countdownRecoveryRef.current = setTimeout(
+      sendCountdownComplete,
+      COUNTDOWN_DURATION_MS + 1000,
+    );
+  }, []);
+
   useEffect(() => {
     if (!isBeatClock || !beatClockTimerEndsAt) {
       setBeatClockRemainingMs(0);
@@ -321,7 +376,8 @@ export default function ActiveQuiz() {
         duration_ms: COUNTDOWN_DURATION_MS,
       },
     });
-  }, [isConnected, sendMessage]);
+    startLocalCountdownFallback("intro_complete_fallback");
+  }, [isConnected, sendMessage, startLocalCountdownFallback]);
 
   // Handle intro audio playback only when the backend starts the intro phase.
   useEffect(() => {
@@ -878,6 +934,7 @@ export default function ActiveQuiz() {
                   duration_ms: COUNTDOWN_DURATION_MS,
                 },
               });
+              startLocalCountdownFallback("skip_intro_fallback");
             }}
             disabled={skipIntroSent}
             className="px-6 py-3 bg-tea-500 text-ink-900 rounded-xl font-semibold hover:bg-tea-400 transition"
