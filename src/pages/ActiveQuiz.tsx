@@ -28,6 +28,7 @@ const COUNTDOWN_DURATION_MS = 3000;
 const MAX_COUNTDOWN_SECONDS = COUNTDOWN_DURATION_MS / 1000;
 const QUESTION_TIMER_MS = 30000;
 const BEAT_CLOCK_WARNING_MS = 10000;
+const BEAT_CLOCK_INTERNAL_POOL_THRESHOLD = 100;
 
 const formatBeatClockTime = (remainingMs: number) => {
   const safeSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
@@ -134,6 +135,13 @@ export default function ActiveQuiz() {
       beatClockState?.started_at ||
       beatClockState?.startedAt,
   );
+  const hasBeatClockQuestionPool =
+    Number(
+      game_status?.total_questions ??
+        wsGameMetadata?.total_questions ??
+        wsGameMetadata?.totalQuestions ??
+        0,
+    ) >= BEAT_CLOCK_INTERNAL_POOL_THRESHOLD;
   const isBeatClock =
     isBeatClockGameType(
       (wsGameState as any)?.gameType,
@@ -152,13 +160,7 @@ export default function ActiveQuiz() {
       (game_status as any)?.game_code,
     ) ||
     hasActiveBeatClockState ||
-    (game_status?.total_questions === 300 &&
-      isBeatClockGameType(
-        wsQuestion?.game_type,
-        wsQuestion?.genre,
-        question?.genre,
-        (game_status as any)?.genre,
-      ));
+    hasBeatClockQuestionPool;
   const beatClockEndsAt =
     beatClockState?.ends_at ?? beatClockState?.endsAt ?? null;
   const questionEndsAt =
