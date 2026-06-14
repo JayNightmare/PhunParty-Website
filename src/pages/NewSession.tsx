@@ -7,6 +7,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import { LoadingButton, LoadingState } from "@/components/Loading";
 import { useToast } from "@/contexts/ToastContext";
 
+const isBeatTheClockGameType = (value: string) => {
+  const normalized = value.trim().toLowerCase().replace(/[_\s]+/g, "-");
+  return normalized.includes("beat-the-clock") || normalized.includes("beat-clock");
+};
+
+const formatGameType = (value: string) =>
+  value
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
 export default function NewSession() {
   const { user, isLoading: authLoading } = useAuth();
   const { showSuccess, showError } = useToast();
@@ -18,6 +28,7 @@ export default function NewSession() {
   const [maxFairPlayStrikes, setMaxFairPlayStrikes] = useState(3);
   const [availableGameTypes, setAvailableGameTypes] = useState<string[]>([]);
   const [selectedGameType, setSelectedGameType] = useState("");
+  const [beatClockDuration, setBeatClockDuration] = useState(60);
 
   const [loading, setLoading] = useState(false);
   const [loadingGameTypes, setLoadingGameTypes] = useState(false);
@@ -126,9 +137,14 @@ export default function NewSession() {
         number_of_questions: num,
         game_code: gameOfType.game_code, // Use actual game code
         ispublic: true,
-        difficulty,
+        difficulty: isBeatTheClockGameType(selectedGameType)
+          ? undefined
+          : difficulty,
         cheat_detection_enabled: fairPlayEnabled,
         max_cheat_strikes: maxFairPlayStrikes,
+        beat_clock_duration_seconds: isBeatTheClockGameType(selectedGameType)
+          ? beatClockDuration
+          : undefined,
       });
       sessionStorage.setItem(
         `phunparty:fair-play:${session.code}`,
@@ -200,13 +216,36 @@ export default function NewSession() {
               >
                 {availableGameTypes.map((gameType) => (
                   <option key={gameType} value={gameType}>
-                    {gameType.charAt(0).toUpperCase() +
-                      gameType.slice(1).replace("-", " ")}
+                    {formatGameType(gameType)}
                   </option>
                 ))}
               </select>
             )}
           </div>
+          {isBeatTheClockGameType(selectedGameType) && (
+            <div>
+              <label className="block text-sm text-stone-300 mb-1">
+                Round Timer
+              </label>
+              <input
+                title="Beat the Clock round timer"
+                type="number"
+                min={15}
+                max={600}
+                step={5}
+                value={beatClockDuration}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  setBeatClockDuration(Number.isFinite(n) ? n : 60);
+                }}
+                className="w-full px-4 py-3 rounded-2xl bg-ink-700 outline-none"
+              />
+              <p className="text-xs text-stone-400 mt-2">
+                Seconds each player has to answer as many questions as possible.
+              </p>
+            </div>
+          )}
+          {!isBeatTheClockGameType(selectedGameType) && (
           <div>
             <label className="block text-sm text-stone-300 mb-1">
               Difficulty
@@ -226,6 +265,7 @@ export default function NewSession() {
               free‑text
             </p>
           </div>
+          )}
         </div>
         <div className="mt-5 rounded-2xl bg-ink-700/70 border border-ink-600 p-4">
           <label className="flex items-start gap-3 cursor-pointer">

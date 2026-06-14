@@ -7,7 +7,7 @@ import { getWebSocketUrl } from "@/lib/api";
 
 export interface GameState {
   sessionCode: string;
-  gameType: "trivia" | "buzzer";
+  gameType: "trivia" | "buzzer" | "beat_the_clock" | string;
   isActive: boolean;
   isStarted?: boolean; // Set to true when game_started message is received
   phase?:
@@ -33,6 +33,7 @@ export interface GameState {
   fairPlay?: FairPlaySettings;
   removedPlayers?: Player[];
   buzzerState?: BuzzerState | null;
+  beatClock?: BeatClockState | null;
 }
 
 export interface Player {
@@ -65,6 +66,26 @@ export interface BuzzerState {
   frozen_players?: string[];
   frozen_roster_player_ids?: string[];
   question_active?: boolean;
+  server_time_ms?: number;
+}
+
+export interface BeatClockState {
+  active?: boolean;
+  duration_seconds?: number;
+  durationSeconds?: number;
+  started_at?: string;
+  startedAt?: string;
+  ends_at?: string;
+  endsAt?: string;
+  leaderboard?: Array<{
+    roster_player_id?: string;
+    player_id?: string;
+    display_name?: string;
+    player_name?: string;
+    player_photo_url?: string | null;
+    score?: number;
+    rank?: number;
+  }>;
   server_time_ms?: number;
 }
 
@@ -344,6 +365,24 @@ export const useGameWebSocket = (
             frozen_question_id: undefined,
           }));
 
+      const playersFromBeatClockLeaderboard = (
+        leaderboard: BeatClockState["leaderboard"],
+      ): Player[] =>
+        Array.isArray(leaderboard)
+          ? leaderboard.map((entry) => ({
+              player_id:
+                entry.player_id ||
+                entry.roster_player_id ||
+                entry.display_name ||
+                "player",
+              roster_player_id: entry.roster_player_id,
+              player_name:
+                entry.display_name || entry.player_name || "Player",
+              player_photo: entry.player_photo_url ?? undefined,
+              score: Number(entry.score ?? 0),
+            }))
+          : [];
+
       const mergeRemovedPlayers = (
         existing: Player[] | undefined,
         incoming: Player[],
@@ -544,9 +583,7 @@ export const useGameWebSocket = (
           return {
             ...base,
             sessionCode: state.session_code || raw.session_code || sessionCode,
-            gameType: (state.game_type || base.gameType || "trivia") as
-              | "trivia"
-              | "buzzer",
+            gameType: state.game_type || base.gameType || "trivia",
             phase: shouldDelayQuestion ? "countdown" : phase,
             isActive: phase !== "lobby" && phase !== "ended",
             isStarted: phase === "question" && !shouldDelayQuestion,
@@ -579,6 +616,7 @@ export const useGameWebSocket = (
               ...(base.game_state || {}),
               ...state,
             },
+            beatClock: state.beat_clock ?? base.beatClock ?? null,
             serverOffsetMs: serverOffsetMsRef.current,
             finalScores:
               state.final_scores ??
@@ -986,15 +1024,20 @@ export const useGameWebSocket = (
 
         case "game_started":
           setGameState((prev) => {
+            const incomingGameType = message.data?.game_type || "trivia";
+            const isBeatClock = incomingGameType === "beat_the_clock";
+            const incomingPhase =
+              message.data?.phase ?? (isBeatClock ? "question" : "intro_audio");
+
             if (!prev) {
               return {
                 sessionCode,
-                gameType: "trivia",
+                gameType: incomingGameType,
                 isActive: true,
                 currentQuestion: null,
                 connectedPlayers: [],
                 game_state: message.data?.game_state ?? null,
-                phase: message.data?.phase ?? "intro_audio",
+                phase: incomingPhase,
                 introEventId:
                   message.event_id ||
                   message.message_id ||
@@ -1002,8 +1045,9 @@ export const useGameWebSocket = (
                   message.data?.message_id ||
                   message.data?.phase_started_at_ms ||
                   null,
-                isStarted: false,
+                isStarted: isBeatClock,
                 serverOffsetMs: serverOffsetMsRef.current,
+                beatClock: isBeatClock ? message.data : null,
               } as GameState;
             }
 
@@ -1027,7 +1071,8 @@ export const useGameWebSocket = (
 
             return {
               ...prev,
-              phase: message.data?.phase ?? "intro_audio",
+              gameType: incomingGameType || prev.gameType,
+              phase: incomingPhase,
               introEventId:
                 message.event_id ||
                 message.message_id ||
@@ -1039,9 +1084,10 @@ export const useGameWebSocket = (
               isActive: true,
               currentQuestion: null,
               connectedPlayers,
-              isStarted: false,
+              isStarted: isBeatClock,
               game_state: message.data?.game_state ?? prev.game_state,
               serverOffsetMs: serverOffsetMsRef.current,
+              beatClock: isBeatClock ? message.data : prev.beatClock,
             } as any;
           });
 
@@ -1186,6 +1232,92 @@ export const useGameWebSocket = (
               : null,
           );
           onGameEnded?.();
+          break;
+
+        case "beat_clock_started":
+        case "beat_clock_state": {
+          updateServerOffset(message.data?.server_time_ms);
+          const leaderboardPlayers = playersFromBeatClockLeaderboard(
+            message.data?.leaderboard,
+          );
+
+          setGameState((prev) => {
+            const base: GameState =
+              prev ||
+              ({
+                sessionCode,
+                gameType: "beat_the_clock",
+                isActive: true,
+                currentQuestion: null,
+                connectedPlayers: [],
+                game_state: null,
+              } as GameState);
+
+            return {
+              ...base,
+              gameType: "beat_the_clock",
+              phase: "question",
+              isActive: true,
+              isStarted: true,
+              currentQuestion: null,
+              connectedPlayers:
+                leaderboardPlayers.length > 0
+                  ? mergePlayers(base.connectedPlayers, leaderboardPlayers)
+                  : base.connectedPlayers,
+              beatClock: {
+                ...(base.beatClock || {}),
+                ...(message.data || {}),
+                active:
+                  message.type === "beat_clock_started"
+                    ? true
+                    : (message.data?.active ?? base.beatClock?.active),
+              },
+              game_state: {
+                ...(base.game_state || {}),
+                beat_clock: message.data,
+              },
+              serverOffsetMs: serverOffsetMsRef.current,
+            };
+          });
+          onUIUpdate?.({ type: message.type, ...message.data });
+          break;
+        }
+
+        case "beat_clock_question":
+          updateServerOffset(message.data?.server_time_ms);
+          setGameState((prev) => {
+            const base: GameState =
+              prev ||
+              ({
+                sessionCode,
+                gameType: "beat_the_clock",
+                isActive: true,
+                currentQuestion: null,
+                connectedPlayers: [],
+                game_state: null,
+              } as GameState);
+
+            return {
+              ...base,
+              gameType: "beat_the_clock",
+              phase: "question",
+              isActive: true,
+              isStarted: true,
+              currentQuestion: mergeQuestion(base.currentQuestion, message.data),
+              game_state: {
+                ...(base.game_state || {}),
+                ...message.data,
+              },
+              beatClock: {
+                ...(base.beatClock || {}),
+                duration_seconds: message.data?.duration_seconds,
+                ends_at: message.data?.ends_at,
+                started_at: message.data?.started_at,
+              },
+              serverOffsetMs: serverOffsetMsRef.current,
+            };
+          });
+          onQuestionStarted?.(message.data);
           break;
 
         case "question_started":

@@ -83,6 +83,12 @@ export default function ActiveQuiz() {
   const serverOffsetMs = (wsGameState as any)?.serverOffsetMs || 0;
   const wsQuestion = (wsGameState as any)?.currentQuestion;
   const wsGameMetadata = (wsGameState as any)?.game_state;
+  const wsGameType = String((wsGameState as any)?.gameType || "").toLowerCase();
+  const isBeatClock = wsGameType === "beat_the_clock";
+  const beatClockState =
+    (wsGameState as any)?.beatClock || wsGameMetadata?.beat_clock || null;
+  const beatClockEndsAt =
+    beatClockState?.ends_at ?? beatClockState?.endsAt ?? null;
   const questionEndsAt =
     wsQuestion?.question_ends_at ??
     wsQuestion?.question_end_at ??
@@ -105,7 +111,7 @@ export default function ActiveQuiz() {
   }, [sendMessage]);
   const hasProtocolState = Boolean(serverPhase);
   const questionIsVisible = hasProtocolState
-    ? serverPhase === "question"
+    ? serverPhase === "question" && !isBeatClock
     : !!game_status?.isstarted;
 
   // Touch gestures for swipe navigation and pull-to-refresh
@@ -182,6 +188,11 @@ export default function ActiveQuiz() {
   useEffect(() => {
     if (!serverPhase) return;
 
+    if (isBeatClock) {
+      setIntroMode(false);
+      return;
+    }
+
     if (
       serverPhase === "intro_audio" ||
       serverPhase === "countdown_pending" ||
@@ -192,7 +203,7 @@ export default function ActiveQuiz() {
     }
 
     setIntroMode(false);
-  }, [serverPhase]);
+  }, [isBeatClock, serverPhase]);
 
   const sendIntroComplete = useCallback(() => {
     if (introCompleteSentRef.current || !sendMessage || !isConnected) return;
@@ -357,6 +368,14 @@ export default function ActiveQuiz() {
     } else {
       // Default to active if no explicit state but a current question exists
       setGameState(game_status.current_question ? "active" : "waiting");
+    }
+
+    if (isBeatClock) {
+      setQuestion(null);
+      if (connectedPlayers && connectedPlayers.length > 0) {
+        setPlayers(connectedPlayers);
+      }
+      return;
     }
 
     // Prefer WebSocket currentQuestion when available
@@ -547,6 +566,7 @@ export default function ActiveQuiz() {
     introMode,
     countdown,
     questionIsVisible,
+    isBeatClock,
     sessionId,
     navigate,
   ]);
@@ -673,9 +693,12 @@ export default function ActiveQuiz() {
     (connectedPlayers && connectedPlayers.length > 0
       ? connectedPlayers
       : players) || [];
-  const displayPlayers = rawDisplayPlayers.filter(
-    (player) => !player.is_kicked,
-  );
+  const displayPlayers = rawDisplayPlayers
+    .filter((player) => !player.is_kicked)
+    .sort((left, right) => {
+      if (!isBeatClock) return 0;
+      return Number(right.score ?? 0) - Number(left.score ?? 0);
+    });
   const removedPlayers = Array.from(
     new Map(
       [
@@ -692,13 +715,18 @@ export default function ActiveQuiz() {
   // Compute answered players using server-provided counts when available,
   // otherwise fall back to per-player answered flags.
   const playersAnswered =
-    Math.min(
-      displayPlayers.length,
-      game_status?.player_response_counts?.answered ??
-        displayPlayers.filter(
-          (p: any) => p.answered_current || p.answeredCurrent,
-        ).length,
-    );
+    isBeatClock
+      ? displayPlayers.reduce(
+          (total, player) => total + Number(player.score ?? 0),
+          0,
+        )
+      : Math.min(
+          displayPlayers.length,
+          game_status?.player_response_counts?.answered ??
+            displayPlayers.filter(
+              (p: any) => p.answered_current || p.answeredCurrent,
+            ).length,
+        );
 
   // Intro screen overlay
   if (introMode) {
@@ -796,11 +824,19 @@ export default function ActiveQuiz() {
 
             <Timer
               ms={
-                questionIsVisible && !questionEndsAt && timerMs
+                isBeatClock
+                  ? undefined
+                  : questionIsVisible && !questionEndsAt && timerMs
                   ? timerMs
                   : undefined
               }
-              endsAt={questionIsVisible ? questionEndsAt : null}
+              endsAt={
+                isBeatClock
+                  ? beatClockEndsAt
+                  : questionIsVisible
+                    ? questionEndsAt
+                    : null
+              }
               serverOffsetMs={serverOffsetMs}
               keyer={keyer}
             />
@@ -811,11 +847,13 @@ export default function ActiveQuiz() {
         <GameControls
           isPaused={game_state === "paused"}
           canGoNext={
+            !isBeatClock &&
             game_state === "active" &&
             (game_status?.current_question_index || 0) <
               (game_status?.total_questions || 1) - 1
           }
           canGoPrevious={
+            !isBeatClock &&
             game_state === "active" &&
             (game_status?.current_question_index || 0) > 0
           }
@@ -836,43 +874,70 @@ export default function ActiveQuiz() {
         <div className="grid md:grid-cols-2 gap-6">
           {/* Question Display */}
           <section>
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold">
-                  Question {(game_status?.current_question_index ?? 0) + 1} of{" "}
-                  {game_status?.total_questions || 0}
+            {isBeatClock ? (
+              <Card className="p-8 text-center">
+                <div className="text-sm uppercase tracking-wide text-tea-400">
+                  Beat the Clock
+                </div>
+                <h2 className="mt-3 text-3xl font-semibold">
+                  Answer as many as you can
                 </h2>
-              </div>
-
-              <div className="text-lg mb-6">
-                {question?.prompt || "Loading question..."}
-              </div>
-
-              {question?.type === "mcq" && question.options && (
-                <div className="grid grid-cols-2 gap-3">
-                  {question.options.map((o: MCQOption) => (
-                    <div
-                      key={o.id}
-                      className="px-4 py-3 bg-ink-700 rounded-2xl text-center"
-                    >
-                      {o.text}
-                    </div>
-                  ))}
+                <div className="mt-6 rounded-2xl bg-ink-700 p-6">
+                  <Timer
+                    endsAt={beatClockEndsAt}
+                    serverOffsetMs={serverOffsetMs}
+                    keyer={`${sessionId}-beat-clock`}
+                  />
                 </div>
-              )}
-
-              {question?.type === "free" && (
-                <div className="p-4 bg-ink-700 rounded-xl text-sm text-stone-300 text-center">
-                  Players answer with free text on their phones.
+                <p className="mt-5 text-stone-300">
+                  Questions are shown privately on each player's phone. The
+                  leaderboard updates live as correct answers come in.
+                </p>
+                {error && (
+                  <div className="mt-4 p-3 bg-red-900/30 border border-red-500/30 rounded-lg text-red-200 text-sm">
+                    {error}
+                  </div>
+                )}
+              </Card>
+            ) : (
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold">
+                    Question {(game_status?.current_question_index ?? 0) + 1} of{" "}
+                    {game_status?.total_questions || 0}
+                  </h2>
                 </div>
-              )}
 
-              {error && (
-                <div className="mt-4 p-3 bg-red-900/30 border border-red-500/30 rounded-lg text-red-200 text-sm">
-                  {error}
+                <div className="text-lg mb-6">
+                  {question?.prompt || "Loading question..."}
                 </div>
-              )}
-            </Card>
+
+                {question?.type === "mcq" && question.options && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {question.options.map((o: MCQOption) => (
+                      <div
+                        key={o.id}
+                        className="px-4 py-3 bg-ink-700 rounded-2xl text-center"
+                      >
+                        {o.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {question?.type === "free" && (
+                  <div className="p-4 bg-ink-700 rounded-xl text-sm text-stone-300 text-center">
+                    Players answer with free text on their phones.
+                  </div>
+                )}
+
+                {error && (
+                  <div className="mt-4 p-3 bg-red-900/30 border border-red-500/30 rounded-lg text-red-200 text-sm">
+                    {error}
+                  </div>
+                )}
+              </Card>
+            )}
           </section>
 
           {/* Session Leaderboard */}
@@ -887,7 +952,9 @@ export default function ActiveQuiz() {
                     </span>
                   )}
                   <span className="text-stone-400">
-                    {playersAnswered}/{displayPlayers.length} answered
+                    {isBeatClock
+                      ? `${playersAnswered} correct`
+                      : `${playersAnswered}/${displayPlayers.length} answered`}
                   </span>
                 </div>
               </div>
@@ -930,13 +997,18 @@ export default function ActiveQuiz() {
                             Disconnected
                           </span>
                         ) : null}
+                        {isBeatClock && (
+                          <div className="text-sm font-semibold text-tea-300">
+                            {Number(p.score ?? 0)} correct
+                          </div>
+                        )}
                         {strikeCount !== null && (
                           <span className="rounded-full bg-ink-800 px-2 py-1 text-xs text-stone-300">
                             Strike {strikeCount}/{maxStrikes}
                           </span>
                         )}
                         <div
-                          className={`text-sm ${
+                          className={`${isBeatClock ? "hidden" : ""} text-sm ${
                             hasAnswered ? "text-green-300" : "text-stone-400"
                           }`}
                         >
