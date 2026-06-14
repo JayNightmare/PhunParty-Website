@@ -97,6 +97,7 @@ export default function ActiveQuiz() {
   const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const countdownStepTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const countdownCompleteSentRef = useRef(false);
   const countdownDisplayRef = useRef<number | null>(null);
   const countdownKeyRef = useRef<string | null>(null);
@@ -104,6 +105,7 @@ export default function ActiveQuiz() {
   const countdownQuestionStartAtRef = useRef<string | null>(null);
   const serverOffsetMsRef = useRef(0);
   const localCountdownActiveRef = useRef(false);
+  const countInLockedRef = useRef(false);
   const sendMessageRef = useRef<((message: any) => void) | undefined>(
     undefined,
   );
@@ -114,6 +116,7 @@ export default function ActiveQuiz() {
   const [skipIntroSent, setSkipIntroSent] = useState(false);
   const [localCountdownActive, setLocalCountdownActive] = useState(false);
   const [localCountdownFinished, setLocalCountdownFinished] = useState(false);
+  const [countInLocked, setCountInLocked] = useState(false);
   // Timer duration based on difficulty – must be declared before any conditional returns
   const [timerMs, setTimerMs] = useState<number | undefined>(undefined);
   const [beatClockRemainingMs, setBeatClockRemainingMs] = useState(0);
@@ -224,6 +227,13 @@ export default function ActiveQuiz() {
     setCountdown(null);
   }, []);
 
+  const clearCountdownStepTimers = useCallback(() => {
+    countdownStepTimersRef.current.forEach((timer) =>
+      window.clearTimeout(timer),
+    );
+    countdownStepTimersRef.current = [];
+  }, []);
+
   const setCountdownDisplay = useCallback((nextValue: number) => {
     setCountdown((current) => {
       const previous = countdownDisplayRef.current ?? current;
@@ -241,6 +251,8 @@ export default function ActiveQuiz() {
 
       setIntroMode(true);
       localCountdownActiveRef.current = true;
+      countInLockedRef.current = true;
+      setCountInLocked(true);
       setLocalCountdownActive(true);
       setLocalCountdownFinished(false);
       countdownCompleteSentRef.current = false;
@@ -257,6 +269,7 @@ export default function ActiveQuiz() {
         clearTimeout(countdownRecoveryRef.current);
         countdownRecoveryRef.current = null;
       }
+      clearCountdownStepTimers();
 
       const sendCountdownComplete = () => {
         if (countdownCompleteSentRef.current) return;
@@ -270,51 +283,64 @@ export default function ActiveQuiz() {
         });
       };
 
-      const updateCountdown = () => {
-        const remainingMs = Math.max(0, questionStartAtMs - Date.now());
-        const displayNumber =
-          remainingMs > 0
-            ? Math.max(
-                1,
-                Math.min(MAX_COUNTDOWN_SECONDS, Math.ceil(remainingMs / 1000)),
-              )
-            : 0;
-        setCountdownDisplay(displayNumber);
-
-        if (remainingMs <= 0) {
-          if (countdownRef.current) {
-            clearInterval(countdownRef.current);
-            countdownRef.current = null;
-          }
+      setCountdownDisplay(MAX_COUNTDOWN_SECONDS);
+      countdownStepTimersRef.current = [
+        window.setTimeout(() => setCountdownDisplay(2), 1000),
+        window.setTimeout(() => setCountdownDisplay(1), 2000),
+        window.setTimeout(() => {
           setCountdownDisplay(0);
           setLocalCountdownFinished(true);
-          window.setTimeout(() => {
-            sendCountdownComplete();
-            resetCountdownDisplay();
-          }, 350);
-        }
-      };
-
-      updateCountdown();
-      countdownRef.current = setInterval(updateCountdown, 200);
+          sendCountdownComplete();
+        }, COUNTDOWN_DURATION_MS),
+        window.setTimeout(() => {
+          countInLockedRef.current = false;
+          setCountInLocked(false);
+          localCountdownActiveRef.current = false;
+          setLocalCountdownActive(false);
+          resetCountdownDisplay();
+        }, COUNTDOWN_DURATION_MS + 450),
+      ];
       countdownRecoveryRef.current = setTimeout(
         sendCountdownComplete,
-        COUNTDOWN_DURATION_MS + 1000,
+        COUNTDOWN_DURATION_MS + 1500,
       );
     },
-    [resetCountdownDisplay, setCountdownDisplay],
+    [clearCountdownStepTimers, resetCountdownDisplay, setCountdownDisplay],
   );
 
   useEffect(() => {
+    if (serverPhase === "ended") {
+      clearCountdownStepTimers();
+      if (countdownRecoveryRef.current) {
+        clearTimeout(countdownRecoveryRef.current);
+        countdownRecoveryRef.current = null;
+      }
+      countInLockedRef.current = false;
+      setCountInLocked(false);
+      localCountdownActiveRef.current = false;
+      setLocalCountdownActive(false);
+      setLocalCountdownFinished(false);
+      resetCountdownDisplay();
+      return;
+    }
+
     if (
-      serverPhase === "ended" ||
-      (beatClockTimerEndsAt && countdown === null)
+      beatClockTimerEndsAt &&
+      countdown === null &&
+      !countInLocked
     ) {
       localCountdownActiveRef.current = false;
       setLocalCountdownActive(false);
       setLocalCountdownFinished(false);
     }
-  }, [beatClockTimerEndsAt, countdown, serverPhase]);
+  }, [
+    beatClockTimerEndsAt,
+    clearCountdownStepTimers,
+    countInLocked,
+    countdown,
+    resetCountdownDisplay,
+    serverPhase,
+  ]);
 
   useEffect(() => {
     if (!isBeatClock || !beatClockTimerEndsAt) {
@@ -427,7 +453,7 @@ export default function ActiveQuiz() {
   useEffect(() => {
     if (!serverPhase) return;
 
-    if (localCountdownActive && !localCountdownFinished) {
+    if (countInLocked || (localCountdownActive && !localCountdownFinished)) {
       setIntroMode(true);
       return;
     }
@@ -442,7 +468,13 @@ export default function ActiveQuiz() {
     }
 
     setIntroMode(false);
-  }, [isBeatClock, localCountdownActive, localCountdownFinished, serverPhase]);
+  }, [
+    countInLocked,
+    isBeatClock,
+    localCountdownActive,
+    localCountdownFinished,
+    serverPhase,
+  ]);
 
   const sendIntroComplete = useCallback(() => {
     if (introCompleteSentRef.current || !sendMessage || !isConnected) return;
@@ -521,7 +553,7 @@ export default function ActiveQuiz() {
       return;
     }
 
-    if (localCountdownActiveRef.current) {
+    if (localCountdownActiveRef.current || countInLockedRef.current) {
       return;
     }
 
@@ -609,12 +641,13 @@ export default function ActiveQuiz() {
         clearInterval(countdownRef.current);
         countdownRef.current = null;
       }
+      clearCountdownStepTimers();
       if (countdownRecoveryRef.current) {
         clearTimeout(countdownRecoveryRef.current);
         countdownRecoveryRef.current = null;
       }
     };
-  }, []);
+  }, [clearCountdownStepTimers]);
 
   // Process game status updates
   useEffect(() => {
@@ -1017,6 +1050,7 @@ export default function ActiveQuiz() {
           ).length,
       );
   const shouldShowIntroOverlay =
+    (countInLocked && serverPhase !== "ended") ||
     (countdown !== null && serverPhase !== "ended") ||
     introMode ||
     (isBeatClock &&
