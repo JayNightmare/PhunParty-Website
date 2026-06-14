@@ -1037,8 +1037,13 @@ export const useGameWebSocket = (
           setGameState((prev) => {
             const incomingGameType = message.data?.game_type || "trivia";
             const isBeatClock = isBeatClockGameType(incomingGameType);
+            const beatClockRoundActive = Boolean(
+              message.data?.ends_at ||
+                message.data?.endsAt ||
+                message.data?.phase === "question",
+            );
             const incomingPhase =
-              message.data?.phase ?? (isBeatClock ? "question" : "intro_audio");
+              message.data?.phase ?? "intro_audio";
 
             if (!prev) {
               return {
@@ -1056,9 +1061,10 @@ export const useGameWebSocket = (
                   message.data?.message_id ||
                   message.data?.phase_started_at_ms ||
                   null,
-                isStarted: isBeatClock,
+                isStarted: isBeatClock ? beatClockRoundActive : false,
                 serverOffsetMs: serverOffsetMsRef.current,
-                beatClock: isBeatClock ? message.data : null,
+                beatClock:
+                  isBeatClock && beatClockRoundActive ? message.data : null,
               } as GameState;
             }
 
@@ -1095,10 +1101,13 @@ export const useGameWebSocket = (
               isActive: true,
               currentQuestion: null,
               connectedPlayers,
-              isStarted: isBeatClock,
+              isStarted: isBeatClock ? beatClockRoundActive : false,
               game_state: message.data?.game_state ?? prev.game_state,
               serverOffsetMs: serverOffsetMsRef.current,
-              beatClock: isBeatClock ? message.data : prev.beatClock,
+              beatClock:
+                isBeatClock && beatClockRoundActive
+                  ? message.data
+                  : prev.beatClock,
             } as any;
           });
 

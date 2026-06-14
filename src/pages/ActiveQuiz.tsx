@@ -40,7 +40,9 @@ const formatBeatClockTime = (remainingMs: number) => {
 const isBeatClockGameType = (...candidates: unknown[]) =>
   candidates.some((candidate) => {
     if (!candidate) return false;
-    const compact = String(candidate).toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const compact = String(candidate)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
     return compact.includes("beattheclock") || compact.includes("beatclock");
   });
 
@@ -57,8 +59,14 @@ const playBeatClockWarningBuzz = () => {
     oscillator.type = "sawtooth";
     oscillator.frequency.value = 140;
     gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.18, audioContext.currentTime + 0.03);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.65);
+    gain.gain.exponentialRampToValueAtTime(
+      0.18,
+      audioContext.currentTime + 0.03,
+    );
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      audioContext.currentTime + 0.65,
+    );
 
     oscillator.connect(gain);
     gain.connect(audioContext.destination);
@@ -86,10 +94,12 @@ export default function ActiveQuiz() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const countdownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const localCountdownFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(
+  const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const localCountdownFallbackRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const countdownCompleteSentRef = useRef(false);
   const countdownDisplayRef = useRef<number | null>(null);
   const countdownKeyRef = useRef<string | null>(null);
@@ -98,7 +108,9 @@ export default function ActiveQuiz() {
   const serverOffsetMsRef = useRef(0);
   const localCountdownActiveRef = useRef(false);
   const serverPhaseRef = useRef<string | undefined>(undefined);
-  const sendMessageRef = useRef<((message: any) => void) | undefined>(undefined);
+  const sendMessageRef = useRef<((message: any) => void) | undefined>(
+    undefined,
+  );
   const introCompleteSentRef = useRef(false);
   const playedIntroRef = useRef<string | null>(null);
   const beatClockAlertPlayedRef = useRef(false);
@@ -142,9 +154,7 @@ export default function ActiveQuiz() {
   const beatClockState =
     (wsGameState as any)?.beatClock || wsGameMetadata?.beat_clock || null;
   const hasActiveBeatClockState = Boolean(
-    beatClockState?.active ||
-      beatClockState?.ends_at ||
-      beatClockState?.endsAt,
+    beatClockState?.active || beatClockState?.ends_at || beatClockState?.endsAt,
   );
   const hasBeatClockQuestionPool =
     Number(
@@ -163,8 +173,7 @@ export default function ActiveQuiz() {
       wsGameMetadata?.genre,
       wsQuestion?.gameType,
       wsQuestion?.game_type,
-      wsQuestion?.genre,
-      wsQuestion?.question_id,
+      wsQuestion?.genstion?.question_id,
       wsQuestion?.id,
       question?.genre,
       question?.id,
@@ -234,92 +243,98 @@ export default function ActiveQuiz() {
     });
   }, []);
 
-  const runLocalCountdownFallback = useCallback((reason: string) => {
-    const questionStartAtMs = Date.now() + COUNTDOWN_DURATION_MS;
-    const questionStartAtIso = new Date(questionStartAtMs).toISOString();
+  const runLocalCountdownFallback = useCallback(
+    (reason: string) => {
+      const questionStartAtMs = Date.now() + COUNTDOWN_DURATION_MS;
+      const questionStartAtIso = new Date(questionStartAtMs).toISOString();
 
-    setIntroMode(true);
-    localCountdownActiveRef.current = true;
-    setLocalCountdownActive(true);
-    setLocalCountdownFinished(false);
-    countdownCompleteSentRef.current = false;
-    countdownDisplayRef.current = null;
-    countdownKeyRef.current = `local:${questionStartAtIso}`;
-    countdownTargetMsRef.current = questionStartAtMs;
-    countdownQuestionStartAtRef.current = questionStartAtIso;
+      setIntroMode(true);
+      localCountdownActiveRef.current = true;
+      setLocalCountdownActive(true);
+      setLocalCountdownFinished(false);
+      countdownCompleteSentRef.current = false;
+      countdownDisplayRef.current = null;
+      countdownKeyRef.current = `local:${questionStartAtIso}`;
+      countdownTargetMsRef.current = questionStartAtMs;
+      countdownQuestionStartAtRef.current = questionStartAtIso;
 
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current);
-      countdownRef.current = null;
-    }
-    if (countdownRecoveryRef.current) {
-      clearTimeout(countdownRecoveryRef.current);
-      countdownRecoveryRef.current = null;
-    }
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+      if (countdownRecoveryRef.current) {
+        clearTimeout(countdownRecoveryRef.current);
+        countdownRecoveryRef.current = null;
+      }
 
-    const sendCountdownComplete = () => {
-      if (countdownCompleteSentRef.current) return;
-      countdownCompleteSentRef.current = true;
-      sendMessageRef.current?.({
-        type: "countdown_complete",
-        data: {
-          question_start_at: questionStartAtIso,
-          reason,
-        },
-      });
-    };
+      const sendCountdownComplete = () => {
+        if (countdownCompleteSentRef.current) return;
+        countdownCompleteSentRef.current = true;
+        sendMessageRef.current?.({
+          type: "countdown_complete",
+          data: {
+            question_start_at: questionStartAtIso,
+            reason,
+          },
+        });
+      };
 
-    const updateCountdown = () => {
-      const remainingMs = Math.max(0, questionStartAtMs - Date.now());
-      const displayNumber =
-        remainingMs > 0
-          ? Math.max(
-              1,
-              Math.min(MAX_COUNTDOWN_SECONDS, Math.ceil(remainingMs / 1000)),
-            )
-          : 0;
-      setCountdownDisplay(displayNumber);
+      const updateCountdown = () => {
+        const remainingMs = Math.max(0, questionStartAtMs - Date.now());
+        const displayNumber =
+          remainingMs > 0
+            ? Math.max(
+                1,
+                Math.min(MAX_COUNTDOWN_SECONDS, Math.ceil(remainingMs / 1000)),
+              )
+            : 0;
+        setCountdownDisplay(displayNumber);
 
-      if (remainingMs <= 0) {
-        if (countdownRef.current) {
-          clearInterval(countdownRef.current);
-          countdownRef.current = null;
+        if (remainingMs <= 0) {
+          if (countdownRef.current) {
+            clearInterval(countdownRef.current);
+            countdownRef.current = null;
+          }
+          resetCountdownDisplay();
+          setLocalCountdownFinished(true);
+          sendCountdownComplete();
         }
-        resetCountdownDisplay();
-        setLocalCountdownFinished(true);
-        sendCountdownComplete();
+      };
+
+      updateCountdown();
+      countdownRef.current = setInterval(updateCountdown, 200);
+      countdownRecoveryRef.current = setTimeout(
+        sendCountdownComplete,
+        COUNTDOWN_DURATION_MS + 1000,
+      );
+    },
+    [resetCountdownDisplay, setCountdownDisplay],
+  );
+
+  const startLocalCountdownFallback = useCallback(
+    (reason: string) => {
+      setIntroMode(true);
+      setLocalCountdownFinished(false);
+
+      if (localCountdownFallbackRef.current) {
+        clearTimeout(localCountdownFallbackRef.current);
       }
-    };
 
-    updateCountdown();
-    countdownRef.current = setInterval(updateCountdown, 200);
-    countdownRecoveryRef.current = setTimeout(
-      sendCountdownComplete,
-      COUNTDOWN_DURATION_MS + 1000,
-    );
-  }, [resetCountdownDisplay, setCountdownDisplay]);
-
-  const startLocalCountdownFallback = useCallback((reason: string) => {
-    setIntroMode(true);
-    setLocalCountdownFinished(false);
-
-    if (localCountdownFallbackRef.current) {
-      clearTimeout(localCountdownFallbackRef.current);
-    }
-
-    localCountdownFallbackRef.current = setTimeout(() => {
-      localCountdownFallbackRef.current = null;
-      const phase = serverPhaseRef.current;
-      if (
-        phase === "countdown" ||
-        phase === "question" ||
-        phase === "ended"
-      ) {
-        return;
-      }
-      runLocalCountdownFallback(reason);
-    }, 2500);
-  }, [runLocalCountdownFallback]);
+      localCountdownFallbackRef.current = setTimeout(() => {
+        localCountdownFallbackRef.current = null;
+        const phase = serverPhaseRef.current;
+        if (
+          phase === "countdown" ||
+          phase === "question" ||
+          phase === "ended"
+        ) {
+          return;
+        }
+        runLocalCountdownFallback(reason);
+      }, 2500);
+    },
+    [runLocalCountdownFallback],
+  );
 
   useEffect(() => {
     if (beatClockTimerEndsAt || serverPhase === "ended") {
@@ -351,10 +366,16 @@ export default function ActiveQuiz() {
   }, [beatClockTimerEndsAt, isBeatClock, serverOffsetMs]);
 
   useEffect(() => {
+    const endsAtMs = beatClockTimerEndsAt
+      ? Date.parse(beatClockTimerEndsAt)
+      : NaN;
+    const isTimerActuallyExpired =
+      Number.isFinite(endsAtMs) && endsAtMs <= Date.now() + serverOffsetMs;
+
     if (
       !isBeatClock ||
       !beatClockTimerEndsAt ||
-      beatClockRemainingMs > 0 ||
+      !isTimerActuallyExpired ||
       beatClockEndSentRef.current ||
       serverPhase === "ended" ||
       game_state === "ended"
@@ -369,11 +390,11 @@ export default function ActiveQuiz() {
       console.warn("Beat the Clock host expiry end signal failed.", err);
     }
   }, [
-    beatClockRemainingMs,
     beatClockTimerEndsAt,
     game_state,
     isBeatClock,
     serverPhase,
+    serverOffsetMs,
     wsGameControls,
   ]);
 
@@ -633,7 +654,6 @@ export default function ActiveQuiz() {
       sendCountdownComplete,
       durationMs + 2000,
     );
-
   }, [
     beatClockTimerEndsAt,
     serverPhase,
@@ -877,7 +897,8 @@ export default function ActiveQuiz() {
         if (playersObj.list && Array.isArray(playersObj.list)) {
           playersObj.list.forEach((player: any) => {
             playerList.push({
-              player_id: player.player_id || player.id || player.roster_player_id,
+              player_id:
+                player.player_id || player.id || player.roster_player_id,
               roster_player_id: player.roster_player_id,
               player_name: player.player_name || player.name,
               player_photo: player.player_photo || player.photo,
@@ -1045,19 +1066,18 @@ export default function ActiveQuiz() {
 
   // Compute answered players using server-provided counts when available,
   // otherwise fall back to per-player answered flags.
-  const playersAnswered =
-    isBeatClock
-      ? displayPlayers.reduce(
-          (total, player) => total + Number(player.score ?? 0),
-          0,
-        )
-      : Math.min(
-          displayPlayers.length,
-          game_status?.player_response_counts?.answered ??
-            displayPlayers.filter(
-              (p: any) => p.answered_current || p.answeredCurrent,
-            ).length,
-        );
+  const playersAnswered = isBeatClock
+    ? displayPlayers.reduce(
+        (total, player) => total + Number(player.score ?? 0),
+        0,
+      )
+    : Math.min(
+        displayPlayers.length,
+        game_status?.player_response_counts?.answered ??
+          displayPlayers.filter(
+            (p: any) => p.answered_current || p.answeredCurrent,
+          ).length,
+      );
   const shouldShowIntroOverlay =
     introMode ||
     (isBeatClock &&
@@ -1096,7 +1116,9 @@ export default function ActiveQuiz() {
             onClick={() => {
               if (skipIntroSent) return;
               if (!sendMessage || !isConnected) {
-                showError("WebSocket is still connecting. Try again in a moment.");
+                showError(
+                  "WebSocket is still connecting. Try again in a moment.",
+                );
                 return;
               }
 
@@ -1207,8 +1229,8 @@ export default function ActiveQuiz() {
                 isBeatClock
                   ? undefined
                   : questionIsVisible && !questionEndsAt && timerMs
-                  ? timerMs
-                  : undefined
+                    ? timerMs
+                    : undefined
               }
               endsAt={
                 isBeatClock
@@ -1346,9 +1368,7 @@ export default function ActiveQuiz() {
                     (p as any).answered_current ||
                     (p as any).answeredCurrent;
                   const strikeCount =
-                    typeof p.strike_count === "number"
-                      ? p.strike_count
-                      : null;
+                    typeof p.strike_count === "number" ? p.strike_count : null;
                   const maxStrikes =
                     typeof p.max_strikes === "number"
                       ? p.max_strikes
