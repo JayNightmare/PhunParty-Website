@@ -96,6 +96,7 @@ export default function ActiveQuiz() {
   const hasNavigatedToStats = useRef(false);
   const [skipIntroSent, setSkipIntroSent] = useState(false);
   const [localCountdownActive, setLocalCountdownActive] = useState(false);
+  const [localCountdownFinished, setLocalCountdownFinished] = useState(false);
   // Timer duration based on difficulty – must be declared before any conditional returns
   const [timerMs, setTimerMs] = useState<number | undefined>(undefined);
   const [beatClockRemainingMs, setBeatClockRemainingMs] = useState(0);
@@ -195,6 +196,7 @@ export default function ActiveQuiz() {
     setIntroMode(true);
     localCountdownActiveRef.current = true;
     setLocalCountdownActive(true);
+    setLocalCountdownFinished(false);
     countdownCompleteSentRef.current = false;
 
     if (countdownRef.current) {
@@ -216,6 +218,13 @@ export default function ActiveQuiz() {
           reason,
         },
       });
+      sendMessageRef.current?.({
+        type: "start_beat_clock_round",
+        data: {
+          game_type: "beat_the_clock",
+          reason,
+        },
+      });
     };
 
     const updateCountdown = () => {
@@ -234,6 +243,8 @@ export default function ActiveQuiz() {
           clearInterval(countdownRef.current);
           countdownRef.current = null;
         }
+        setCountdown(null);
+        setLocalCountdownFinished(true);
         sendCountdownComplete();
       }
     };
@@ -250,6 +261,7 @@ export default function ActiveQuiz() {
     if (beatClockTimerEndsAt || serverPhase === "ended") {
       localCountdownActiveRef.current = false;
       setLocalCountdownActive(false);
+      setLocalCountdownFinished(false);
     }
   }, [beatClockTimerEndsAt, serverPhase]);
 
@@ -924,6 +936,10 @@ export default function ActiveQuiz() {
           </p>
           {countdown !== null ? (
             <div className="text-6xl font-mono">{countdown}</div>
+          ) : localCountdownFinished ? (
+            <div className="animate-pulse text-tea-400">
+              Starting Beat the Clock...
+            </div>
           ) : serverPhase === "countdown_pending" ? (
             <div className="animate-pulse text-tea-400">
               Starting countdown...
