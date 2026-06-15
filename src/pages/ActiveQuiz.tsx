@@ -97,7 +97,7 @@ export default function ActiveQuiz() {
   const countdownRecoveryRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const countdownStepTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const countdownStepTimersRef = useRef<number[]>([]);
   const countdownCompleteSentRef = useRef(false);
   const countdownDisplayRef = useRef<number | null>(null);
   const countdownKeyRef = useRef<string | null>(null);
@@ -257,7 +257,8 @@ export default function ActiveQuiz() {
       reason: string;
     }) => {
       const questionStartAtIso =
-        questionStartAt || new Date(Date.now() + COUNTDOWN_DURATION_MS).toISOString();
+        questionStartAt ||
+        new Date(Date.now() + COUNTDOWN_DURATION_MS).toISOString();
 
       setIntroMode(true);
       localCountdownActiveRef.current = true;
@@ -268,7 +269,7 @@ export default function ActiveQuiz() {
       countdownCompleteSentRef.current = false;
       countdownDisplayRef.current = null;
       countdownKeyRef.current = `local:${questionStartAtIso}`;
-      countdownTargetMsRef.current = questionStartAtMs;
+      countdownTargetMsRef.current = Date.now() + COUNTDOWN_DURATION_MS;
       countdownQuestionStartAtRef.current = questionStartAtIso;
 
       if (countdownRef.current) {
