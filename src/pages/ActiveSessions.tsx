@@ -21,8 +21,14 @@ export default function ActiveSessions() {
   const [sessions, setSessions] = useState<GameResponse[]>([]);
   const [status, setStatus] = useState<GameStatusResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const focus = focusedSessionCode || sessions[0]?.code;
+  const focusedSession = focus
+    ? sessions.find((session) => session.code === focus)
+    : undefined;
+  const canViewFocusedSession = Boolean(focusedSession);
+  const focusedSessionCodeForDisplay = focusedSession?.code || "";
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -34,6 +40,7 @@ export default function ActiveSessions() {
 
       try {
         setLoading(true);
+        setSessionsLoaded(false);
         const list = await getOwnedUserSessions();
 
         if (cancelled) return;
@@ -48,6 +55,7 @@ export default function ActiveSessions() {
         }
       } finally {
         if (!cancelled) {
+          setSessionsLoaded(true);
           setLoading(false);
         }
       }
@@ -61,7 +69,7 @@ export default function ActiveSessions() {
   }, [authLoading, user?.id, focusedSessionCode, nav]);
 
   useEffect(() => {
-    if (!focus) {
+    if (!focus || !canViewFocusedSession) {
       setStatus(null);
       return;
     }
@@ -86,13 +94,13 @@ export default function ActiveSessions() {
     return () => {
       cancelled = true;
     };
-  }, [focus]);
+  }, [focus, canViewFocusedSession]);
 
   // Use real-time updates for the focused session
   const { game_status: realTimeStatus, isConnected } = useGameUpdates({
-    sessionCode: focus || "",
+    sessionCode: canViewFocusedSession ? focusedSessionCodeForDisplay : "",
     pollInterval: 3000,
-    enableWebSocket: Boolean(user && focus),
+    enableWebSocket: Boolean(user && canViewFocusedSession),
   });
 
   // Merge real-time status with local status if available
@@ -159,22 +167,23 @@ export default function ActiveSessions() {
         </Card>
       </section>
       <section>
-        {focus ? (
+        {canViewFocusedSession ? (
           <Card className="p-6">
             <div className="grid md:grid-cols-2 gap-4 items-start">
               <div className="flex flex-col items-center gap-3">
-                <QR value={`https://phun.party/#/join/${focus}`} />
+                <QR
+                  value={`https://phun.party/#/join/${focusedSessionCodeForDisplay}`}
+                />
                 <div className="text-xs text-stone-300">
                   Scan or visit:{" "}
                   <span className="underline">
-                    https://phun.party/#/join/{focus}
+                    https://phun.party/#/join/{focusedSessionCodeForDisplay}
                   </span>
                 </div>
               </div>
               <div>
                 <div className="font-semibold text-lg">
-                  {sessions.find((session) => session.code === focus)?.name ||
-                    focus}
+                  {focusedSession?.name || focusedSessionCodeForDisplay}
                 </div>
                 <div className="flex items-center gap-2 mb-3">
                   <div className="text-sm text-stone-300">
@@ -212,17 +221,15 @@ export default function ActiveSessions() {
                   <Link
                     to={
                       currentStatus?.game_state === "active"
-                        ? `/play/${focus}`
-                        : `/session/${
-                            sessions.find((s) => s.code === focus)?.code
-                          }/waiting`
+                        ? `/play/${focusedSessionCodeForDisplay}`
+                        : `/session/${focusedSessionCodeForDisplay}/waiting`
                     }
                     className="px-5 py-2 rounded-2xl bg-peach-500 text-ink-900 font-semibold"
                   >
                     Go to quiz
                   </Link>
                   <Link
-                    to={`/stats/${focus}`}
+                    to={`/stats/${focusedSessionCodeForDisplay}`}
                     className="px-5 py-2 rounded-2xl bg-ink-700"
                   >
                     View stats
@@ -232,7 +239,13 @@ export default function ActiveSessions() {
             </div>
           </Card>
         ) : (
-          <Card className="p-6">No session focused.</Card>
+          <Card className="p-6">
+            {!sessionsLoaded
+              ? "Loading..."
+              : focus
+                ? "You do not have access to this session."
+                : "No session focused."}
+          </Card>
         )}
       </section>
     </main>
