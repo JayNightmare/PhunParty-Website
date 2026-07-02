@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import Card from "@/components/Card";
 import { useEffect, useState } from "react";
 import {
@@ -7,43 +7,118 @@ import {
   GameStatusResponse,
   ScoresResponseModel,
 } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 type ScoreWithPlayer = ScoresResponseModel & {
   name: string;
 };
 
+function extractApiMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error || "");
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.detail === "string") return parsed.detail;
+    if (typeof parsed?.message === "string") return parsed.message;
+  } catch {
+    // Fall back to the raw message.
+  }
+
+  return raw || "Unable to load stats";
+}
+
+function isAccessError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("not authenticated") ||
+    normalized.includes("unauthorized") ||
+    normalized.includes("forbidden") ||
+    normalized.includes("permission") ||
+    normalized.includes("401") ||
+    normalized.includes("403")
+  );
+}
+
 export default function PostGameStats() {
   const { sessionId } = useParams();
+  const { user, isLoading: authLoading } = useAuth();
   const [status, setStatus] = useState<GameStatusResponse | null>(null);
   const [scores, setScores] = useState<ScoreWithPlayer[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   useEffect(() => {
+    if (authLoading || !user || !sessionId) return;
+
+    let cancelled = false;
+
     const run = async () => {
-      if (!sessionId) return;
       try {
         setLoading(true);
-        const [st, sc] = await Promise.all([
-          getSessionStatus(sessionId).catch(() => null),
-          getScores(sessionId).catch(() => []),
+        setError(null);
+        setAccessDenied(false);
+        setStatus(null);
+        setScores([]);
+
+        const [statusResult, scoresResult] = await Promise.allSettled([
+          getSessionStatus(sessionId),
+          getScores(sessionId),
         ]);
-        if (st) setStatus(st);
-        if (sc && sc.length > 0) {
-          const scoresWithNames: ScoreWithPlayer[] = sc.map((score) => ({
+
+        if (cancelled) return;
+
+        if (statusResult.status === "fulfilled") {
+          setStatus(statusResult.value);
+        }
+
+        if (scoresResult.status === "rejected") {
+          const message = extractApiMessage(scoresResult.reason);
+          if (isAccessError(message)) {
+            setAccessDenied(true);
+            setError(
+              "You do not have access to this session's stats. Check you are logged into the account that hosted or played this session.",
+            );
+          } else {
+            setError(message || "Failed to load stats");
+          }
+          return;
+        }
+
+        const scoresWithNames: ScoreWithPlayer[] = scoresResult.value.map(
+          (score) => ({
             ...score,
             name: score.display_name || "Player",
-          }));
-          setScores(scoresWithNames);
+          }),
+        );
+        setScores(scoresWithNames);
+
+        if (scoresWithNames.length === 0) {
+          setError("No scores are available for this session yet.");
+        }
+
+        if (statusResult.status === "rejected" && scoresWithNames.length === 0) {
+          const message = extractApiMessage(statusResult.reason);
+          setError(message || "Failed to load session status");
         }
       } catch (err: any) {
-        setError(err.message || "Failed to load stats");
+        if (!cancelled) {
+          const message = extractApiMessage(err);
+          setAccessDenied(isAccessError(message));
+          setError(message || "Failed to load stats");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
     run();
-  }, [sessionId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, sessionId]);
 
   const sorted = [...scores].sort((a, b) => b.score - a.score);
   const winner = sorted[0];
@@ -54,6 +129,41 @@ export default function PostGameStats() {
       : "in progress";
 
   if (!sessionId) return <main className="p-8">Session not specified.</main>;
+
+  if (!authLoading && !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (authLoading) {
+    return (
+      <main className="max-w-5xl mx-auto px-4 py-8">
+        <Card className="p-6">
+          <div className="text-stone-400">Loading...</div>
+        </Card>
+      </main>
+    );
+  }
+
+  if (!loading && (accessDenied || (error && scores.length === 0))) {
+    return (
+      <main className="max-w-3xl mx-auto px-4 py-8">
+        <Card className="p-6">
+          <div className="text-lg font-semibold">Stats unavailable</div>
+          <div className="mt-2 text-sm text-stone-300">
+            {error || "You do not have access to this session's stats."}
+          </div>
+          <div className="mt-6">
+            <Link
+              to="/sessions"
+              className="px-5 py-2 rounded-2xl bg-tea-500 text-ink-900 font-semibold"
+            >
+              Back to sessions
+            </Link>
+          </div>
+        </Card>
+      </main>
+    );
+  }
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-8 grid md:grid-cols-2 gap-6">
