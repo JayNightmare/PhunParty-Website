@@ -5,6 +5,11 @@ import { LoadingButton } from "@/components/Loading";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 
+const TERMS_URL =
+    "https://terms-and-privacy.nexusgit.info/websites/phun-party/terms";
+const PRIVACY_URL =
+    "https://terms-and-privacy.nexusgit.info/websites/phun-party/privacy";
+
 export default function Register() {
     const navigate = useNavigate();
     const { register, isLoading, error, clearError } = useAuth();
@@ -16,10 +21,17 @@ export default function Register() {
         password: "",
         confirmPassword: "",
     });
+    const [termsAccepted, setTermsAccepted] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
 
     const handleInputChange = (field: string, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
+        if (localError) setLocalError(null);
+        if (error) clearError();
+    };
+
+    const handleTermsChange = (accepted: boolean) => {
+        setTermsAccepted(accepted);
         if (localError) setLocalError(null);
         if (error) clearError();
     };
@@ -49,6 +61,10 @@ export default function Register() {
 
         if (password !== confirmPassword) {
             return "Passwords do not match";
+        }
+
+        if (!termsAccepted) {
+            return "You must accept the Terms of Service and Privacy Policy to sign up.";
         }
 
         return null;
@@ -206,6 +222,40 @@ export default function Register() {
                             required
                         />
                     </div>
+
+                    <label className="flex items-start gap-3 rounded-2xl bg-ink-800/60 border border-ink-700 p-3 text-sm text-stone-300">
+                        <input
+                            type="checkbox"
+                            checked={termsAccepted}
+                            onChange={(e) =>
+                                handleTermsChange(e.target.checked)
+                            }
+                            disabled={isLoading}
+                            required
+                            className="mt-1 h-4 w-4 rounded border-stone-500 bg-ink-700 text-tea-500 focus:ring-2 focus:ring-tea-500"
+                        />
+                        <span>
+                            I agree to the{" "}
+                            <a
+                                href={TERMS_URL}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-tea-400 hover:text-tea-300 underline underline-offset-2"
+                            >
+                                Terms of Service
+                            </a>{" "}
+                            and{" "}
+                            <a
+                                href={PRIVACY_URL}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-tea-400 hover:text-tea-300 underline underline-offset-2"
+                            >
+                                Privacy Policy
+                            </a>
+                            .
+                        </span>
+                    </label>
 
                     {displayError && (
                         <div className="bg-red-900/20 border border-red-700 rounded-2xl p-3">
