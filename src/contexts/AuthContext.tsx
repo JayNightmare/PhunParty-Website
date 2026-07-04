@@ -171,10 +171,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 hashed_password: userData.password, // Backend expects plain password and does bcrypt hashing
             };
 
-            const response = await createPlayer(registerData);
-
-            // After successful registration, log them in
-            await handleLogin(userData.player_email, userData.password);
+            await createPlayer(registerData);
         } catch (err: any) {
             setError(err.message || "Registration failed");
             throw err;
