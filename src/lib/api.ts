@@ -226,6 +226,7 @@ export interface PlayerResponse {
   player_email: string;
   player_mobile?: string | null;
   active_game_code?: string | null;
+  email_verified?: boolean;
 }
 
 export interface PlayerStatusSummary {
@@ -332,6 +333,7 @@ type BackendPlayer = {
   player_mobile?: string | null;
   hashed_password?: string;
   active_game_code?: string | null;
+  email_verified?: boolean;
 };
 
 type BackendGame = {
@@ -425,6 +427,7 @@ const mapPlayer = (raw: BackendPlayer): PlayerResponse => ({
   player_email: raw.player_email,
   player_mobile: raw.player_mobile ?? null,
   active_game_code: raw.active_game_code ?? null,
+  email_verified: raw.email_verified ?? false,
 });
 
 const mapGame = (raw: BackendGame): GameResponse => ({
@@ -613,6 +616,19 @@ export interface PasswordUpdateRequest {
   new_password: string;
 }
 
+export interface EmailVerificationRequest {
+  player_email: string;
+  code: string;
+}
+
+export interface ResendEmailVerificationRequest {
+  player_email: string;
+}
+
+export interface EmailVerificationResponse {
+  message: string;
+}
+
 export interface PasswordResetResponse {
   message: string;
   reset_token?: string;
@@ -653,6 +669,24 @@ export async function createPlayer(
     body: JSON.stringify(data),
   });
   return mapPlayer(raw);
+}
+
+export async function verifyEmail(
+  data: EmailVerificationRequest,
+): Promise<EmailVerificationResponse> {
+  return apiFetch<EmailVerificationResponse>("/players/verify-email", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function resendEmailVerification(
+  data: ResendEmailVerificationRequest,
+): Promise<EmailVerificationResponse> {
+  return apiFetch<EmailVerificationResponse>("/players/resend-verification", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 export async function getPlayer(player_id: string): Promise<PlayerResponse> {
