@@ -10,6 +10,15 @@ const TERMS_URL =
     "https://terms-and-privacy.nexusgit.info/websites/phun-party/terms";
 const PRIVACY_URL =
     "https://terms-and-privacy.nexusgit.info/websites/phun-party/privacy";
+const pendingVerificationEmailKey = "phunparty:pending-verification-email";
+
+function getPendingVerificationEmail() {
+    try {
+        return sessionStorage.getItem(pendingVerificationEmailKey) || "";
+    } catch {
+        return "";
+    }
+}
 
 export default function Register() {
     const navigate = useNavigate();
@@ -24,8 +33,12 @@ export default function Register() {
     });
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
-    const [isVerificationStep, setIsVerificationStep] = useState(false);
-    const [registeredEmail, setRegisteredEmail] = useState("");
+    const [isVerificationStep, setIsVerificationStep] = useState(
+        () => !!getPendingVerificationEmail()
+    );
+    const [registeredEmail, setRegisteredEmail] = useState(
+        getPendingVerificationEmail
+    );
     const [isResending, setIsResending] = useState(false);
 
     const handleInputChange = (field: string, value: string) => {
@@ -92,7 +105,9 @@ export default function Register() {
                 player_mobile: formData.mobile.trim() || undefined,
                 password: formData.password,
             });
-            setRegisteredEmail(formData.email.trim());
+            const email = formData.email.trim();
+            sessionStorage.setItem(pendingVerificationEmailKey, email);
+            setRegisteredEmail(email);
             setIsVerificationStep(true);
             showSuccess(
                 "Account created. Check your email and tap the verification button."
@@ -101,6 +116,7 @@ export default function Register() {
             const message = err instanceof Error ? err.message : "";
             if (message.toLowerCase().includes("email already exists")) {
                 const email = formData.email.trim();
+                sessionStorage.setItem(pendingVerificationEmailKey, email);
                 setRegisteredEmail(email);
                 try {
                     await resendEmailVerification({ player_email: email });
@@ -169,6 +185,11 @@ export default function Register() {
                                     {registeredEmail || formData.email}
                                 </span>
                                 . Tap it to verify your email and continue.
+                            </p>
+                            <p className="mt-3 rounded-xl border border-tea-500/20 bg-tea-500/10 px-3 py-2 text-xs text-tea-100">
+                                Delivery is usually quick, but it can take up
+                                to a few minutes to arrive. Check your spam or
+                                junk folder if it does not appear.
                             </p>
                         </div>
 
