@@ -13,6 +13,7 @@ import Account from "@/pages/Account";
 import Join from "@/pages/Join";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import VerifyEmail from "@/pages/VerifyEmail";
 import EditProfile from "@/pages/EditProfile";
 import ForgotPassword from "@/pages/ForgotPassword";
 import SessionWaitingRoom from "@/pages/SessionWaitingRoom";
@@ -57,6 +58,7 @@ export default function App() {
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/new" element={<NewSession />} />
               <Route path="/sessions" element={<ActiveSessions />} />

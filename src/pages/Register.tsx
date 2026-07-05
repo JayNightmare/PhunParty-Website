@@ -4,7 +4,7 @@ import Card from "@/components/Card";
 import { LoadingButton } from "@/components/Loading";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
-import { resendEmailVerification, verifyEmail } from "@/lib/api";
+import { resendEmailVerification } from "@/lib/api";
 
 const TERMS_URL =
     "https://terms-and-privacy.nexusgit.info/websites/phun-party/terms";
@@ -13,7 +13,7 @@ const PRIVACY_URL =
 
 export default function Register() {
     const navigate = useNavigate();
-    const { register, login, isLoading, error, clearError } = useAuth();
+    const { register, isLoading, error, clearError } = useAuth();
     const { showSuccess, showError } = useToast();
     const [formData, setFormData] = useState({
         name: "",
@@ -25,7 +25,6 @@ export default function Register() {
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
     const [isVerificationStep, setIsVerificationStep] = useState(false);
-    const [verificationCode, setVerificationCode] = useState("");
     const [registeredEmail, setRegisteredEmail] = useState("");
     const [isResending, setIsResending] = useState(false);
 
@@ -96,7 +95,7 @@ export default function Register() {
             setRegisteredEmail(formData.email.trim());
             setIsVerificationStep(true);
             showSuccess(
-                "Account created. Check your email for your verification code."
+                "Account created. Check your email and tap the verification button."
             );
         } catch (err) {
             const message = err instanceof Error ? err.message : "";
@@ -125,34 +124,6 @@ export default function Register() {
         }
     };
 
-    const handleVerifyEmail = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLocalError(null);
-        clearError();
-
-        const code = verificationCode.trim();
-        if (!/^\d{6}$/.test(code)) {
-            setLocalError("Enter the 6 digit code from your email.");
-            return;
-        }
-
-        try {
-            await verifyEmail({
-                player_email: registeredEmail || formData.email.trim(),
-                code,
-            });
-            await login(registeredEmail || formData.email.trim(), formData.password);
-            showSuccess("Email verified. Welcome to PhunParty!");
-            navigate("/account", { replace: true });
-        } catch (err) {
-            setLocalError(
-                err instanceof Error
-                    ? err.message
-                    : "Unable to verify that code."
-            );
-        }
-    };
-
     const handleResendCode = async () => {
         setLocalError(null);
         clearError();
@@ -162,12 +133,12 @@ export default function Register() {
             await resendEmailVerification({
                 player_email: registeredEmail || formData.email.trim(),
             });
-            showSuccess("Verification code sent.");
+            showSuccess("Verification email sent.");
         } catch (err) {
             showError(
                 err instanceof Error
                     ? err.message
-                    : "Unable to resend verification code."
+                    : "Unable to resend verification email."
             );
         } finally {
             setIsResending(false);
@@ -187,40 +158,17 @@ export default function Register() {
                 </div>
 
                 {isVerificationStep ? (
-                    <form onSubmit={handleVerifyEmail} className="space-y-4">
-                        <div>
-                            <label
-                                htmlFor="verificationCode"
-                                className="block text-sm text-stone-300 mb-1"
-                            >
-                                Email Verification Code
-                            </label>
-                            <input
-                                id="verificationCode"
-                                type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                maxLength={6}
-                                value={verificationCode}
-                                onChange={(e) => {
-                                    setVerificationCode(
-                                        e.target.value.replace(/\D/g, "")
-                                    );
-                                    if (localError) setLocalError(null);
-                                    if (error) clearError();
-                                }}
-                                className="w-full px-4 py-3 rounded-2xl bg-ink-700 outline-none focus:ring-2 focus:ring-tea-500 transition-all text-center text-xl tracking-[0.35em]"
-                                placeholder="000000"
-                                disabled={isLoading}
-                                autoComplete="one-time-code"
-                                required
-                            />
-                            <p className="text-stone-400 text-sm mt-2">
-                                We sent a 6 digit code to{" "}
-                                <span className="text-stone-200">
+                    <div className="space-y-4">
+                        <div className="rounded-2xl bg-ink-800/60 border border-ink-700 p-4">
+                            <h2 className="text-lg font-semibold">
+                                Check Your Email
+                            </h2>
+                            <p className="text-stone-300 text-sm mt-2">
+                                We sent a verification button to{" "}
+                                <span className="text-stone-100">
                                     {registeredEmail || formData.email}
                                 </span>
-                                .
+                                . Tap it to verify your email and continue.
                             </p>
                         </div>
 
@@ -232,24 +180,25 @@ export default function Register() {
                             </div>
                         )}
 
-                        <LoadingButton
-                            type="submit"
-                            isLoading={isLoading}
-                            loadingText="Verifying..."
-                            className="w-full"
-                        >
-                            Verify Email
-                        </LoadingButton>
-
                         <button
                             type="button"
                             onClick={handleResendCode}
                             disabled={isLoading || isResending}
+                            className="w-full"
+                        >
+                            <span className="block px-4 py-3 rounded-2xl bg-tea-500 text-ink-900 font-semibold hover:bg-tea-400 disabled:bg-stone-500 transition-colors">
+                                {isResending ? "Sending..." : "Resend verification email"}
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => navigate("/login")}
                             className="w-full text-sm text-tea-400 hover:text-tea-300 disabled:text-stone-500 transition-colors"
                         >
-                            {isResending ? "Sending..." : "Resend code"}
+                            Back to sign in
                         </button>
-                    </form>
+                    </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-4">
                     <div>

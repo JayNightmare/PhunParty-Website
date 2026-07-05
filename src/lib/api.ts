@@ -591,13 +591,16 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   access_token: string;
+  refresh_token?: string;
   token_type: string;
+  expires_in?: number;
   user: {
     player_id: string;
     player_name: string;
     player_email: string;
     player_mobile?: string | null;
     active_game_code?: string | null;
+    email_verified?: boolean;
   };
 }
 
@@ -623,6 +626,10 @@ export interface EmailVerificationRequest {
 
 export interface ResendEmailVerificationRequest {
   player_email: string;
+}
+
+export interface EmailVerificationTokenRequest {
+  token: string;
 }
 
 export interface EmailVerificationResponse {
@@ -675,6 +682,15 @@ export async function verifyEmail(
   data: EmailVerificationRequest,
 ): Promise<EmailVerificationResponse> {
   return apiFetch<EmailVerificationResponse>("/players/verify-email", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function verifyEmailToken(
+  data: EmailVerificationTokenRequest,
+): Promise<LoginResponse> {
+  return apiFetch<LoginResponse>("/players/verify-email-token", {
     method: "POST",
     body: JSON.stringify(data),
   });
