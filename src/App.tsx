@@ -31,16 +31,41 @@ export default function App() {
   // Register service worker for PWA functionality
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
+      const handleControllerChange = () => {
+        const reloadKey = "phunparty-sw-reloaded";
+        if (sessionStorage.getItem(reloadKey) === "1") return;
+        sessionStorage.setItem(reloadKey, "1");
+        window.location.reload();
+      };
+
+      const handleLoad = () => {
         navigator.serviceWorker
           .register("/sw.js")
           .then((registration) => {
-            // Service worker registered successfully
+            registration.update().catch(() => {
+              // Ignore update check failures; normal navigation still works.
+            });
           })
-          .catch((registrationError) => {
+          .catch(() => {
             // Service worker registration failed
           });
-      });
+
+        navigator.serviceWorker.addEventListener(
+          "controllerchange",
+          handleControllerChange
+        );
+      };
+
+      window.addEventListener("load", handleLoad);
+      preloadCriticalComponents();
+
+      return () => {
+        window.removeEventListener("load", handleLoad);
+        navigator.serviceWorker.removeEventListener(
+          "controllerchange",
+          handleControllerChange
+        );
+      };
     }
 
     // Preload critical components on idle

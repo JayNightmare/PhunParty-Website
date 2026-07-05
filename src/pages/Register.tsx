@@ -107,12 +107,12 @@ export default function Register() {
                     clearError();
                     setIsVerificationStep(true);
                     showSuccess(
-                        "That account already exists but still needs verification. We sent a new code."
+                        "That account already exists but still needs verification. We sent a new verification email."
                     );
                     return;
                 } catch {
                     setLocalError(
-                        "That account already exists. Try signing in, or resend the verification code from this page after refreshing."
+                        "That account already exists. Try signing in, or resend the verification email from this page after refreshing."
                     );
                     return;
                 }
