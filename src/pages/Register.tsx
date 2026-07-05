@@ -161,6 +161,14 @@ export default function Register() {
         }
     };
 
+    const handleUseDifferentEmail = () => {
+        sessionStorage.removeItem(pendingVerificationEmailKey);
+        setIsVerificationStep(false);
+        setRegisteredEmail("");
+        setLocalError(null);
+        clearError();
+    };
+
     const displayError = localError || error;
 
     return (
@@ -218,6 +226,14 @@ export default function Register() {
                             className="w-full text-sm text-tea-400 hover:text-tea-300 disabled:text-stone-500 transition-colors"
                         >
                             Back to sign in
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={handleUseDifferentEmail}
+                            className="w-full text-sm text-stone-400 hover:text-stone-200 transition-colors"
+                        >
+                            Use a different email
                         </button>
                     </div>
                 ) : (
