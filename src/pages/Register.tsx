@@ -99,7 +99,29 @@ export default function Register() {
                 "Account created. Check your email for your verification code."
             );
         } catch (err) {
-            // Error is handled by auth context
+            const message = err instanceof Error ? err.message : "";
+            if (message.toLowerCase().includes("email already exists")) {
+                const email = formData.email.trim();
+                setRegisteredEmail(email);
+                try {
+                    await resendEmailVerification({ player_email: email });
+                    clearError();
+                    setIsVerificationStep(true);
+                    showSuccess(
+                        "That account already exists but still needs verification. We sent a new code."
+                    );
+                    return;
+                } catch {
+                    setLocalError(
+                        "That account already exists. Try signing in, or resend the verification code from this page after refreshing."
+                    );
+                    return;
+                }
+            }
+
+            setLocalError(
+                message || "Account could not be created. Please try again."
+            );
         }
     };
 
