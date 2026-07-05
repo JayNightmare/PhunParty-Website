@@ -14,7 +14,6 @@ import { useToast } from "@/contexts/ToastContext";
 import useGameUpdates from "@/hooks/useGameUpdates";
 import ConnectionIndicator from "@/components/ConnectionIndicator";
 import MobileAnswerSelector from "@/components/MobileAnswerSelector";
-import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { useTouchGestures } from "@/hooks/useTouchGestures";
 
 export default function Join() {
@@ -632,9 +631,6 @@ export default function Join() {
         isRefreshing || gestureRefreshing ? "transform" : ""
       }`}
     >
-      {/* PWA Install Prompt */}
-      <PWAInstallPrompt />
-
       {/* Pull to refresh indicator */}
       {(isRefreshing || gestureRefreshing) && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-ink-800 text-tea-400 px-4 py-2 rounded-full text-sm shadow-lg border border-ink-600">

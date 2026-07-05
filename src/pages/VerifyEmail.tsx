@@ -6,6 +6,23 @@ import { useToast } from "@/contexts/ToastContext";
 
 type VerificationState = "verifying" | "verified" | "error";
 
+const verifiedTokenKey = (token: string) =>
+    `phunparty:verified-email-token:${token}`;
+
+function verificationErrorMessage(error: unknown) {
+    const fallback = "This verification link is invalid or expired.";
+    if (!(error instanceof Error)) return fallback;
+
+    try {
+        const parsed = JSON.parse(error.message);
+        if (typeof parsed?.detail === "string") return parsed.detail;
+    } catch {
+        // The error was already plain text.
+    }
+
+    return error.message || fallback;
+}
+
 export default function VerifyEmail() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -22,26 +39,40 @@ export default function VerifyEmail() {
 
         const token = searchParams.get("token");
         if (!token) {
+            if (searchParams.get("verified") === "1") {
+                setState("verified");
+                return;
+            }
+
             setState("error");
             setLocalError("This verification link is missing its token.");
             return;
         }
 
+        if (sessionStorage.getItem(verifiedTokenKey(token)) === "1") {
+            setState("verified");
+            return;
+        }
+
         completeEmailVerification(token)
             .then(() => {
+                sessionStorage.setItem(verifiedTokenKey(token), "1");
                 setState("verified");
                 showSuccess("Email verified. Welcome to PhunParty!");
+                navigate("/verify-email?verified=1", { replace: true });
                 window.setTimeout(() => {
                     navigate("/account", { replace: true });
                 }, 1800);
             })
             .catch((err) => {
+                if (sessionStorage.getItem(verifiedTokenKey(token)) === "1") {
+                    setState("verified");
+                    navigate("/verify-email?verified=1", { replace: true });
+                    return;
+                }
+
                 setState("error");
-                setLocalError(
-                    err instanceof Error
-                        ? err.message
-                        : "This verification link is invalid or expired."
-                );
+                setLocalError(verificationErrorMessage(err));
             });
     }, [clearError, completeEmailVerification, navigate, searchParams, showSuccess]);
 
