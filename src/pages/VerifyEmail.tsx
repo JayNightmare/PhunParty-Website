@@ -16,6 +16,7 @@ const APP_VERIFY_SCHEME_URL =
     "phunpartymobileapp://verify-email";
 const APP_INSTALL_URL =
     import.meta.env.VITE_APP_INSTALL_URL || "https://phun.party/#/app";
+const MOBILE_APP_OPEN_DELAY_MS = 2200;
 
 function verificationErrorMessage(error: unknown) {
     const fallback = "This verification link is invalid or expired.";
@@ -80,8 +81,11 @@ export default function VerifyEmail() {
             if (isMobileBrowser()) {
                 setMobileToken(token);
                 setState("mobile_app");
-                window.setTimeout(() => setShowMobileFallback(true), 1600);
-                openApp(token);
+                window.setTimeout(() => openApp(token), MOBILE_APP_OPEN_DELAY_MS);
+                window.setTimeout(
+                    () => setShowMobileFallback(true),
+                    MOBILE_APP_OPEN_DELAY_MS + 1600
+                );
             } else {
                 setState("verified");
             }
@@ -103,8 +107,14 @@ export default function VerifyEmail() {
                 if (isMobileBrowser()) {
                     setMobileToken(token);
                     setState("mobile_app");
-                    window.setTimeout(() => setShowMobileFallback(true), 1600);
-                    openApp(token);
+                    window.setTimeout(
+                        () => openApp(token),
+                        MOBILE_APP_OPEN_DELAY_MS
+                    );
+                    window.setTimeout(
+                        () => setShowMobileFallback(true),
+                        MOBILE_APP_OPEN_DELAY_MS + 1600
+                    );
                     return;
                 }
 
@@ -120,10 +130,13 @@ export default function VerifyEmail() {
                         setMobileToken(token);
                         setState("mobile_app");
                         window.setTimeout(
-                            () => setShowMobileFallback(true),
-                            1600
+                            () => openApp(token),
+                            MOBILE_APP_OPEN_DELAY_MS
                         );
-                        openApp(token);
+                        window.setTimeout(
+                            () => setShowMobileFallback(true),
+                            MOBILE_APP_OPEN_DELAY_MS + 1600
+                        );
                     } else {
                         setState("verified");
                     }
@@ -187,7 +200,7 @@ export default function VerifyEmail() {
                             Email Verified
                         </h1>
                         <p className="text-stone-300 mt-3">
-                            We are opening PhunParty on your phone now.
+                            We will open PhunParty on your phone in a moment.
                         </p>
 
                         <div className="mt-6 space-y-3">
