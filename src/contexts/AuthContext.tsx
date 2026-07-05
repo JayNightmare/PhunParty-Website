@@ -8,9 +8,10 @@ import React, {
 import {
     login,
     createPlayer,
+    verifyEmailToken,
     LoginRequest,
     CreatePlayerRequest,
-    PlayerResponse,
+    LoginResponse,
 } from "@/lib/api";
 import CORSHelper from "@/components/CORSHelper";
 
@@ -26,6 +27,7 @@ interface AuthContextType {
     user: User | null;
     token: string | null;
     login: (email: string, password: string) => Promise<void>;
+    completeEmailVerification: (token: string) => Promise<void>;
     register: (userData: RegisterData) => Promise<void>;
     logout: () => void;
     updateUser: (userData: Partial<User>) => void;
@@ -72,6 +74,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.removeItem("auth_user");
     };
 
+    const applyLoginResponse = (response: LoginResponse) => {
+        if (!response) {
+            throw new Error("No response received from login");
+        }
+        if (!response.user) {
+            console.error("Login response:", response);
+            throw new Error("Invalid login response: missing user data");
+        }
+
+        const authToken = response.access_token;
+        setToken(authToken);
+        localStorage.setItem("auth_token", authToken);
+
+        const userData: User = {
+            id: response.user.player_id,
+            name: response.user.player_name,
+            email: response.user.player_email,
+            mobile: response.user.player_mobile || undefined,
+            active_game_code: response.user.active_game_code || undefined,
+        };
+
+        setUser(userData);
+        localStorage.setItem("auth_user", JSON.stringify(userData));
+    };
+
     // Initialize auth state from localStorage
     useEffect(() => {
         const storedToken = localStorage.getItem("auth_token");
@@ -113,32 +140,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 password,
             };
             const response = await login(loginData);
-
-            // Validate response structure
-            if (!response) {
-                throw new Error("No response received from login");
-            }
-            if (!response.user) {
-                console.error("Login response:", response);
-                throw new Error("Invalid login response: missing user data");
-            }
-
-            // Store token
-            const authToken = response.access_token;
-            setToken(authToken);
-            localStorage.setItem("auth_token", authToken);
-
-            // Create user object from the login response
-            const userData: User = {
-                id: response.user.player_id,
-                name: response.user.player_name,
-                email: response.user.player_email,
-                mobile: response.user.player_mobile || undefined,
-                active_game_code: response.user.active_game_code || undefined,
-            };
-
-            setUser(userData);
-            localStorage.setItem("auth_user", JSON.stringify(userData));
+            applyLoginResponse(response);
         } catch (err: any) {
             const errorMessage = err.message || "Login failed";
             setError(errorMessage);
@@ -152,6 +154,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 setShowCORSHelper(true);
             }
 
+            throw err;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCompleteEmailVerification = async (verificationToken: string) => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const response = await verifyEmailToken({ token: verificationToken });
+            applyLoginResponse(response);
+        } catch (err: any) {
+            const errorMessage = err.message || "Email verification failed";
+            setError(errorMessage);
             throw err;
         } finally {
             setIsLoading(false);
@@ -201,6 +219,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         user,
         token,
         login: handleLogin,
+        completeEmailVerification: handleCompleteEmailVerification,
         register: handleRegister,
         logout: handleLogout,
         updateUser: handleUpdateUser,
